@@ -135,24 +135,22 @@ const MODELS: ModelItem[] = RAW_MODELS.map(model => ({
 }));
 
 const ACRYLIC_COLORS = [
-  { code: 'LM-8001', name: 'פנינה', hex: '#f1f5f9', border: '#cbd5e1' },
-  { code: 'WT-6064', name: 'Pure White (לבן טהור)', hex: '#ffffff', border: '#cbd5e1' },
-  { code: 'MATT-WM', name: 'לבן שיש מט', hex: '#f8fafc', border: '#cbd5e1' },
-  { code: 'SS-6818', name: 'אפור עננים', hex: '#64748b', border: '#475569' },
-  { code: 'MB-6427', name: 'לבן שיש', hex: '#e2e8f0', border: '#cbd5e1' },
-  { code: 'BK-6252', name: 'שחור', hex: '#0f172a', border: '#020617' },
-  { code: 'MATT-WH', name: 'לבן מט', hex: '#f8fafc', border: '#cbd5e1' },
-  { code: 'SS-6807', name: 'מיד-נייט', hex: '#0b0f19', border: '#000000' },
-  { code: 'SS-6808', name: 'חום טוסקנה', hex: '#78350f', border: '#451a03' },
+  { code: 'LM-8001', name: 'פנינה', hex: '#f1f5f9', border: '#cbd5e1', image: 'models/acrylics/pearl.jpeg' },
+  { code: 'WT-8026', name: 'סופר וויט מט', hex: '#f8fafc', border: '#cbd5e1', image: 'models/acrylics/super-white.jpeg' },
+  { code: 'MB-6427', name: 'לבן שיש', hex: '#e2e8f0', border: '#cbd5e1', image: 'models/acrylics/sterling-silver.jpeg' },
+  { code: 'SS-6807', name: 'מיד-נייט', hex: '#0b0f19', border: '#000000', image: 'models/acrylics/midnight.jpeg' },
+  { code: 'SS-6808', name: 'חום טוסקנה', hex: '#78350f', border: '#451a03', image: 'models/acrylics/tuscan-brown.jpeg' },
+  { code: 'SS-6818', name: 'אפור עננים', hex: '#64748b', border: '#475569', image: 'models/acrylics/storm-clouds.jpeg' },
 ];
 
 const CABINET_COLORS = [
-  { id: 'brown', name: 'חום בהיר - Brown', hex: '#8c6747' },
-  { id: 'dark-gray', name: 'אפור - Dark gray', hex: '#4b5563' },
-  { id: 'black', name: 'שחור - Black', hex: '#18181b' },
-  { id: 'cappuccino', name: 'קפוצ׳ינו', hex: '#a38068' },
-  { id: 'espresso-stripes', name: 'אספרסו פסים לרוחב', hex: '#2d1f18' },
-  { id: 'smoked-gray-stripes', name: 'אפור מעושן פסים לרוחב', hex: '#696969' },
+  { id: 'black', name: 'שחור', hex: '#18181b', image: 'models/cabinets/black.jpeg' },
+  { id: 'dark-gray', name: 'אפור', hex: '#4b5563', image: 'models/cabinets/dark-gray.jpeg' },
+  { id: 'brown', name: 'אגוז', hex: '#8c6747', image: 'models/cabinets/brown.jpeg' },
+  { id: 'coffee-brown', name: 'חום קפה', hex: '#4a2f22', image: 'models/cabinets/coffee-brown.jpeg' },
+  { id: 'espresso-stripes', name: 'אספרסו (פסים לרוחב, בתוספת תשלום)', hex: '#2d1f18', image: 'models/cabinets/espresso-stripes.jpeg' },
+  { id: 'smoked-gray-stripes', name: 'אפור מעושן (פסים לרוחב, בתוספת תשלום)', hex: '#696969', image: 'models/cabinets/smoked-gray-stripes.jpeg' },
+  { id: 'cappuccino', name: 'קפוצ׳ינו (פסים לרוחב, בתוספת תשלום)', hex: '#a38068', image: 'models/cabinets/cappuccino.jpeg' },
   { id: 'none', name: 'ללא חיפוי (קליפה בלבד)', hex: 'transparent' },
 ];
 
@@ -769,7 +767,7 @@ function SpaProductionPage() {
                   {availableAcrylics.map((color) => (
                     <button type="button" key={color.code} onClick={() => setSelectedAcrylicCode(color.code)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedAcrylicCode === color.code ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
                       <div className="flex items-center gap-4">
-                        <span className="w-8 h-8 rounded-full border shadow-sm shrink-0" style={{ backgroundColor: color.hex, borderColor: color.border }}></span>
+                        <span className="w-8 h-8 rounded-full border shadow-sm shrink-0 bg-cover bg-center" style={color.image ? { backgroundImage: `url(${color.image})`, borderColor: color.border } : { backgroundColor: color.hex, borderColor: color.border }}></span>
                         <div className="text-sm">
                           <span className="text-slate-900 font-bold">{color.name}</span>
                           <span className="font-mono text-slate-400 text-[11px] block">{color.code}</span>
@@ -789,7 +787,7 @@ function SpaProductionPage() {
                         {cab.hex === 'transparent' ? (
                           <div className="w-8 h-8 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
                         ) : (
-                          <span className="w-8 h-8 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: cab.hex }}></span>
+                          <span className="w-8 h-8 rounded-full border border-slate-300 shadow-sm bg-cover bg-center" style={cab.image ? { backgroundImage: `url(${cab.image})` } : { backgroundColor: cab.hex }}></span>
                         )}
                         <span className="text-sm font-bold text-slate-900">{cab.name}</span>
                       </div>
@@ -896,7 +894,7 @@ function SpaProductionPage() {
                   <div>
                     <span className="block text-[10px] text-slate-400 font-bold uppercase mb-1.5">גוון אקריל</span>
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full border shadow-sm" style={{ backgroundColor: currentAcrylicObj?.hex, borderColor: currentAcrylicObj?.border }}></div>
+                      <div className="w-6 h-6 rounded-full border shadow-sm bg-cover bg-center" style={currentAcrylicObj?.image ? { backgroundImage: `url(${currentAcrylicObj.image})`, borderColor: currentAcrylicObj?.border } : { backgroundColor: currentAcrylicObj?.hex, borderColor: currentAcrylicObj?.border }}></div>
                       <span className="text-xs font-bold text-slate-700">{currentAcrylicObj?.name}</span>
                     </div>
                   </div>
@@ -906,9 +904,9 @@ function SpaProductionPage() {
                       {currentCabinetObj?.hex === 'transparent' ? (
                         <div className="w-6 h-6 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
                       ) : (
-                        <div className="w-6 h-6 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: currentCabinetObj?.hex }}></div>
+                        <div className="w-6 h-6 rounded-full border border-slate-300 shadow-sm bg-cover bg-center" style={currentCabinetObj?.image ? { backgroundImage: `url(${currentCabinetObj.image})` } : { backgroundColor: currentCabinetObj?.hex }}></div>
                       )}
-                      <span className="text-xs font-bold text-slate-700">{currentCabinetObj?.name.split(' - ')[0]}</span>
+                      <span className="text-xs font-bold text-slate-700">{currentCabinetObj?.name}</span>
                     </div>
                   </div>
                 </div>
@@ -1090,7 +1088,7 @@ function SpaProductionPage() {
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">רמת איבזור:</span><span className="font-bold text-slate-800">{currentEquipmentObj?.name}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">סוג התקנה:</span><span className="font-bold text-slate-800">{INSTALLATION_TYPES.find(i => i.id === installationType)?.label}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">צבע קליפה (אקריל):</span><span className="font-bold text-slate-800">{currentAcrylicObj?.name}</span></div>
-                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">חיפוי חיצוני:</span><span className="font-bold text-slate-800">{currentCabinetObj?.name.split('-')[0]}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">חיפוי חיצוני:</span><span className="font-bold text-slate-800">{currentCabinetObj?.name}</span></div>
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">חיבור חשמל:</span><span className="font-bold text-slate-800">{selectedPhase === 'three' ? 'תלת פאזי' : 'חד פאזי'}</span></div>
