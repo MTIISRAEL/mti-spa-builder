@@ -144,15 +144,25 @@ const ACRYLIC_COLORS = [
 ];
 
 const CABINET_COLORS = [
-  { id: 'black', name: 'שחור', hex: '#18181b', image: 'models/cabinets/black.jpeg' },
-  { id: 'dark-gray', name: 'אפור', hex: '#4b5563', image: 'models/cabinets/dark-gray.jpeg' },
-  { id: 'brown', name: 'אגוז', hex: '#8c6747', image: 'models/cabinets/brown.jpeg' },
-  { id: 'coffee-brown', name: 'חום קפה', hex: '#4a2f22', image: 'models/cabinets/coffee-brown.jpeg' },
-  { id: 'espresso-stripes', name: 'אספרסו (פסים לרוחב, בתוספת תשלום)', hex: '#2d1f18', image: 'models/cabinets/espresso-stripes.jpeg' },
-  { id: 'smoked-gray-stripes', name: 'אפור מעושן (פסים לרוחב, בתוספת תשלום)', hex: '#696969', image: 'models/cabinets/smoked-gray-stripes.jpeg' },
-  { id: 'cappuccino', name: 'קפוצ׳ינו (פסים לרוחב, בתוספת תשלום)', hex: '#a38068', image: 'models/cabinets/cappuccino.jpeg' },
+  { id: 'black', name: 'שחור', nameEn: 'Black', hex: '#18181b', image: 'models/cabinets/black.jpeg', series: 'classic' },
+  { id: 'dark-gray', name: 'אפור', nameEn: 'Grey', hex: '#4b5563', image: 'models/cabinets/dark-gray.jpeg', series: 'classic' },
+  { id: 'brown', name: 'אגוז', nameEn: 'Walnut', hex: '#8c6747', image: 'models/cabinets/brown.jpeg', series: 'classic' },
+  { id: 'coffee-brown', name: 'חום קפה', nameEn: 'Coffee Brown', hex: '#4a2f22', image: 'models/cabinets/coffee-brown.jpeg', series: 'classic' },
+  { id: 'espresso-stripes', name: 'אספרסו', nameEn: 'Espresso', hex: '#2d1f18', image: 'models/cabinets/espresso-stripes.jpeg', series: 'horizontal' },
+  { id: 'smoked-gray-stripes', name: 'אפור מעושן', nameEn: 'Smoked Grey', hex: '#696969', image: 'models/cabinets/smoked-gray-stripes.jpeg', series: 'horizontal' },
+  { id: 'cappuccino', name: 'קפוצ׳ינו', nameEn: 'Cappuccino', hex: '#a38068', image: 'models/cabinets/cappuccino.jpeg', series: 'horizontal' },
   { id: 'none', name: 'ללא חיפוי (קליפה בלבד)', hex: 'transparent' },
 ];
+
+const CABINET_SERIES_LABELS = {
+  classic: 'הסדרה הקלאסית — פסים צרים',
+  horizontal: 'הסדרה האופקית — פסים רחבים (בתוספת תשלום)',
+};
+
+const CABINET_HERO_IMAGES = {
+  classic: 'models/cabinets/hero-classic.jpeg',
+  horizontal: 'models/cabinets/hero-horizontal.jpeg',
+};
 
 const INSTALLATION_TYPES = [
   { id: 'above-ground', label: 'התקנה עילית', desc: 'מונח על ריצוף / משטח' },
@@ -531,6 +541,7 @@ function SpaProductionPage() {
   const currentEquipmentObj = currentModelObj?.equipments.find(eq => eq.sku === selectedEquipmentSku) || currentModelObj?.equipments[0];
   const currentAcrylicObj = ACRYLIC_COLORS.find(a => a.code === selectedAcrylicCode);
   const currentCabinetObj = CABINET_COLORS.find(c => c.id === selectedCabinet);
+  const cabinetHeroImage = currentCabinetObj?.series ? CABINET_HERO_IMAGES[currentCabinetObj.series] : null;
   const fullSpaTitle = serialDigits ? `ספא מס' ${serialDigits}` : 'טרם הוקצה מספר ספא';
   const availableAcrylics = currentModelObj?.isSwimSpa ? ACRYLIC_COLORS.filter(c => c.code === 'MB-6427') : ACRYLIC_COLORS;
 
@@ -760,42 +771,64 @@ function SpaProductionPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-blue-600" size={20} /> 4. צבע קליפת אקריליק</label>
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                  {availableAcrylics.map((color) => (
-                    <button type="button" key={color.code} onClick={() => setSelectedAcrylicCode(color.code)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedAcrylicCode === color.code ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
-                      <div className="flex items-center gap-4">
-                        <span className="w-8 h-8 rounded-full border shadow-sm shrink-0 bg-cover bg-center" style={color.image ? { backgroundImage: `url(${color.image})`, borderColor: color.border } : { backgroundColor: color.hex, borderColor: color.border }}></span>
-                        <div className="text-sm">
-                          <span className="text-slate-900 font-bold">{color.name}</span>
-                          <span className="font-mono text-slate-400 text-[11px] block">{color.code}</span>
-                        </div>
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-blue-600" size={20} /> 4. צבע קליפת אקריליק</label>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                {availableAcrylics.map((color) => (
+                  <button type="button" key={color.code} onClick={() => setSelectedAcrylicCode(color.code)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedAcrylicCode === color.code ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
+                    <div className="flex items-center gap-4">
+                      <span className="w-8 h-8 rounded-full border shadow-sm shrink-0 bg-cover bg-center" style={color.image ? { backgroundImage: `url(${color.image})`, borderColor: color.border } : { backgroundColor: color.hex, borderColor: color.border }}></span>
+                      <div className="text-sm">
+                        <span className="text-slate-900 font-bold">{color.name}</span>
+                        <span className="font-mono text-slate-400 text-[11px] block">{color.code}</span>
                       </div>
-                      {selectedAcrylicCode === color.code && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                    {selectedAcrylicCode === color.code && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
+                  </button>
+                ))}
               </div>
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                  {CABINET_COLORS.map((cab) => (
-                    <button type="button" key={cab.id} onClick={() => setSelectedCabinet(cab.id)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedCabinet === cab.id ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
-                      <div className="flex items-center gap-4">
-                        {cab.hex === 'transparent' ? (
-                          <div className="w-8 h-8 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
-                        ) : (
-                          <span className="w-8 h-8 rounded-full border border-slate-300 shadow-sm bg-cover bg-center" style={cab.image ? { backgroundImage: `url(${cab.image})` } : { backgroundColor: cab.hex }}></span>
-                        )}
-                        <span className="text-sm font-bold text-slate-900">{cab.name}</span>
-                      </div>
-                      {selectedCabinet === cab.id && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
-                    </button>
-                  ))}
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
+              {cabinetHeroImage && (
+                <div className="mb-5 rounded-2xl overflow-hidden border border-slate-200 relative">
+                  <img src={cabinetHeroImage} alt="תצוגה של החיפוי המותקן" className="w-full h-48 object-cover" />
+                  <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[11px] font-bold px-2 py-1 rounded-lg">כך ייראה החיפוי בהתקנה בפועל</span>
                 </div>
+              )}
+              <div className="space-y-6">
+                {['classic', 'horizontal'].map((seriesKey) => (
+                  <div key={seriesKey}>
+                    <div className="bg-slate-100 px-4 py-2 rounded-xl mb-3">
+                      <span className="text-sm font-bold text-slate-700">{CABINET_SERIES_LABELS[seriesKey]}</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {CABINET_COLORS.filter(cab => cab.series === seriesKey).map((cab) => (
+                        <button type="button" key={cab.id} onClick={() => setSelectedCabinet(cab.id)} className="group text-center cursor-pointer">
+                          <div className={`aspect-square rounded-2xl overflow-hidden border-2 bg-cover bg-center relative transition shadow-sm ${selectedCabinet === cab.id ? 'border-blue-600 ring-2 ring-blue-600/30' : 'border-slate-200 group-hover:border-blue-300'}`} style={{ backgroundImage: `url(${cab.image})` }}>
+                            {selectedCabinet === cab.id && (
+                              <div className="absolute top-2 left-2 bg-blue-600 text-white rounded-full p-1 shadow"><CheckCircle2 size={16} /></div>
+                            )}
+                          </div>
+                          <div className="mt-2">
+                            <div className="text-sm font-bold text-slate-900">{cab.name}</div>
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wide">{cab.nameEn}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
+
+              <button type="button" onClick={() => setSelectedCabinet('none')} className={`w-full mt-5 p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedCabinet === 'none' ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden shrink-0"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
+                  <span className="text-sm font-bold text-slate-900">ללא חיפוי (קליפה בלבד)</span>
+                </div>
+                {selectedCabinet === 'none' && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
