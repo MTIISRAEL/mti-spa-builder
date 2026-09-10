@@ -54,7 +54,8 @@ import {
   ClipboardList,
   Printer,
   ArrowDownToLine,
-  MessageSquare
+  MessageSquare,
+  X
 } from "lucide-react";
 
 interface EquipmentLevel {
@@ -147,10 +148,10 @@ const CABINET_COLORS = [
   { id: 'black', name: 'שחור', nameEn: 'Black', hex: '#18181b', image: 'models/cabinets/black.jpeg', series: 'classic' },
   { id: 'dark-gray', name: 'אפור', nameEn: 'Grey', hex: '#4b5563', image: 'models/cabinets/dark-gray.jpeg', series: 'classic' },
   { id: 'brown', name: 'אגוז', nameEn: 'Walnut', hex: '#8c6747', image: 'models/cabinets/brown.jpeg', series: 'classic' },
-  { id: 'coffee-brown', name: 'חום קפה', nameEn: 'Coffee Brown', hex: '#4a2f22', image: 'models/cabinets/coffee-brown.jpeg', series: 'classic' },
+  { id: 'black-stripes', name: 'שחור', nameEn: 'Black', hex: '#18181b', image: 'models/cabinets/black-stripes.jpeg', series: 'horizontal' },
+  { id: 'cappuccino', name: 'קפוצ׳ינו', nameEn: 'Cappuccino', hex: '#a38068', image: 'models/cabinets/cappuccino.jpeg', series: 'horizontal' },
   { id: 'espresso-stripes', name: 'אספרסו', nameEn: 'Espresso', hex: '#2d1f18', image: 'models/cabinets/espresso-stripes.jpeg', series: 'horizontal' },
   { id: 'smoked-gray-stripes', name: 'אפור מעושן', nameEn: 'Smoked Grey', hex: '#696969', image: 'models/cabinets/smoked-gray-stripes.jpeg', series: 'horizontal' },
-  { id: 'cappuccino', name: 'קפוצ׳ינו', nameEn: 'Cappuccino', hex: '#a38068', image: 'models/cabinets/cappuccino.jpeg', series: 'horizontal' },
   { id: 'none', name: 'ללא חיפוי (קליפה בלבד)', hex: 'transparent' },
 ];
 
@@ -275,6 +276,7 @@ function SpaProductionPage() {
   const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
   const [lightedSidesCount, setLightedSidesCount] = useState<number>(0);
   const [salesNotes, setSalesNotes] = useState<string>('');
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -790,30 +792,46 @@ function SpaProductionPage() {
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
-              <div className="space-y-8">
+              <div className="space-y-5">
                 {['classic', 'horizontal'].map((seriesKey) => (
                   <div key={seriesKey}>
                     <div className="bg-slate-100 px-4 py-2 rounded-xl mb-3">
                       <span className="text-sm font-bold text-slate-700">{CABINET_SERIES_LABELS[seriesKey]}</span>
                     </div>
-                    <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 relative">
-                      <img src={CABINET_HERO_IMAGES[seriesKey]} alt={`תצוגה של ${CABINET_SERIES_LABELS[seriesKey]} בהתקנה`} className="w-full h-48 object-cover" />
-                      <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[11px] font-bold px-2 py-1 rounded-lg">כך ייראה החיפוי בהתקנה בפועל</span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {CABINET_COLORS.filter(cab => cab.series === seriesKey).map((cab) => (
-                        <button type="button" key={cab.id} onClick={() => setSelectedCabinet(cab.id)} className="group text-center cursor-pointer">
-                          <div className={`aspect-square rounded-2xl overflow-hidden border-2 bg-cover bg-center relative transition shadow-sm ${selectedCabinet === cab.id ? 'border-blue-600 ring-2 ring-blue-600/30' : 'border-slate-200 group-hover:border-blue-300'}`} style={{ backgroundImage: `url(${cab.image})` }}>
-                            {selectedCabinet === cab.id && (
-                              <div className="absolute top-2 left-2 bg-blue-600 text-white rounded-full p-1 shadow"><CheckCircle2 size={16} /></div>
-                            )}
-                          </div>
-                          <div className="mt-2">
-                            <div className="text-sm font-bold text-slate-900">{cab.name}</div>
-                            <div className="text-[10px] text-slate-400 uppercase tracking-wide">{cab.nameEn}</div>
-                          </div>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="sm:w-2/5 shrink-0 rounded-2xl overflow-hidden border border-slate-200 relative group">
+                        <img src={CABINET_HERO_IMAGES[seriesKey]} alt={`תצוגה של ${CABINET_SERIES_LABELS[seriesKey]} בהתקנה`} className="w-full h-32 sm:h-full object-cover" />
+                        <span className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-lg">כך ייראה בהתקנה בפועל</span>
+                        <button type="button" onClick={() => setZoomImage(CABINET_HERO_IMAGES[seriesKey])} className="absolute top-1.5 left-1.5 bg-white/90 hover:bg-white text-slate-700 rounded-full p-1.5 shadow cursor-pointer" title="הגדל תמונה">
+                          <Search size={14} />
                         </button>
-                      ))}
+                      </div>
+                      <div className="flex-1 grid grid-cols-3 sm:grid-cols-4 gap-3 content-start">
+                        {CABINET_COLORS.filter(cab => cab.series === seriesKey).map((cab) => (
+                          <div key={cab.id} className="text-center">
+                            <button type="button" onClick={() => setSelectedCabinet(cab.id)} className="group/tile relative block w-full cursor-pointer">
+                              <div className={`aspect-square rounded-xl overflow-hidden border-2 bg-cover bg-center relative transition shadow-sm ${selectedCabinet === cab.id ? 'border-blue-600 ring-2 ring-blue-600/30' : 'border-slate-200 group-hover/tile:border-blue-300'}`} style={{ backgroundImage: `url(${cab.image})` }}>
+                                {selectedCabinet === cab.id && (
+                                  <div className="absolute top-1 right-1 bg-blue-600 text-white rounded-full p-0.5 shadow"><CheckCircle2 size={12} /></div>
+                                )}
+                              </div>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setZoomImage(cab.image); }}
+                                className="absolute bottom-1 left-1 bg-white/90 hover:bg-white text-slate-600 rounded-full p-1 shadow cursor-pointer"
+                                title="הגדל תמונה"
+                              >
+                                <Search size={10} />
+                              </span>
+                            </button>
+                            <div className="mt-1.5">
+                              <div className="text-xs font-bold text-slate-900 leading-tight">{cab.name}</div>
+                              <div className="text-[9px] text-slate-400 uppercase tracking-wide">{cab.nameEn}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1412,6 +1430,15 @@ function SpaProductionPage() {
               </svg>
             </div>
           </main>
+        </div>
+      )}
+
+      {zoomImage && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6" onClick={() => setZoomImage(null)}>
+          <button type="button" onClick={() => setZoomImage(null)} className="absolute top-5 left-5 bg-white/90 hover:bg-white text-slate-800 rounded-full p-2.5 shadow-lg cursor-pointer">
+            <X size={22} />
+          </button>
+          <img src={zoomImage} alt="הגדלת תמונה" className="max-w-full max-h-full rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
