@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M.T.I - מערכת ייצור ספא</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
+      "lucide-react": "https://esm.sh/lucide-react@0.475.0?deps=react@18.3.1&external=react"
+    }
+  }
+  </script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.9/babel.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <div id="root"></div>
+
+  <script type="text/plain" id="app-source">
+import React, { useState, useRef, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Sparkles,
+  ArrowLeft,
+  ArrowRight,
+  Save,
+  Trash2,
+  CheckCircle2,
+  Layers,
+  Palette,
+  Box,
+  Search,
+  Wrench,
+  Zap,
+  Lightbulb,
+  Archive,
+  Clock,
+  PlusCircle,
+  ShoppingCart,
+  Compass,
+  Hash,
+  Info,
+  RotateCcw,
+  RotateCw,
+  Settings,
+  Check,
+  Award,
+  ClipboardList,
+  Printer,
+  ArrowDownToLine,
+  MessageSquare
+} from "lucide-react";
+
+interface EquipmentLevel {
+  sku: string;
+  name: string;
+}
+
+interface ModelItem {
+  id: string;
+  name: string;
+  dimensions: string;
+  isSwimSpa?: boolean;
+  equipments: EquipmentLevel[];
+}
+
+interface PlacedItem {
+  id: string;
+  type: string;
+  label: string;
+  x: number;
+  y: number;
+  diameterMm: number;
+  widthMm?: number;
+  heightMm?: number;
+  shape?: 'circle' | 'oval' | 'rect';
+  rotation?: number;
+  color: string;
+}
+
+interface OrderData {
+  id: string;
+  serialDigits: string;
+  selectedModelId: string;
+  selectedEquipmentSku: string;
+  selectedAcrylicCode: string;
+  selectedCabinet: string;
+  selectedPhase: 'single' | 'three';
+  installationType: 'above-ground' | 'semi-inground' | 'fully-inground';
+  selectedAccessories: string[];
+  lightedSidesCount: number;
+  salesNotes: string;
+  placedItems: PlacedItem[];
+  status: 'draft' | 'final';
+  updatedAt: number;
+}
+
+const RAW_MODELS: ModelItem[] = [
+  { id: '30330', name: 'גארדה MTI-303', dimensions: '200x200', equipments: [{ sku: '30307', name: '(2) מבצע חד פעמי' }, { sku: '30305', name: '(3) טיטניום' }] },
+  { id: '30101', name: 'פולריס MTI-301', dimensions: '205x205', equipments: [{ sku: '30115', name: '(1) אורבן' }, { sku: '30113', name: '(1) איזי' }, { sku: '30111', name: '(1) סילבר' }, { sku: '30120', name: '(2) גולד' }, { sku: '30131', name: '(3) טיטניום' }, { sku: '30117', name: '(4) דואל מוטור' }] },
+  { id: '30200', name: 'אמטיסט MTI-302', dimensions: '210x150', equipments: [{ sku: '30210', name: '(1) סילבר' }, { sku: '30220', name: '(2) גולד' }, { sku: '30230', name: '(3) טיטניום' }] },
+  { id: '30250', name: "ג'וניור MTI-315", dimensions: '210x160', equipments: [{ sku: '30265', name: '(3) טיטניום' }] },
+  { id: '31101', name: 'שיין MTI-311', dimensions: '210x170', equipments: [{ sku: '31120', name: '(3) טיטניום' }] },
+  { id: '30740', name: 'באלי MTI-307', dimensions: '215x215', equipments: [{ sku: '30735', name: '(3) טיטניום' }] },
+  { id: '31201', name: 'אושיין MTI-306', dimensions: '220x220', equipments: [{ sku: '31230', name: '(3) טיטניום' }] },
+  { id: '30901', name: 'ריביירה MTI-309', dimensions: '220x220', equipments: [{ sku: '30903', name: '(3) טיטניום' }] },
+  { id: '30501', name: 'אקסקליבר MTI-305', dimensions: '230x230', equipments: [{ sku: '30509', name: '(1) אורבן' }, { sku: '30510', name: '(1) סילבר' }, { sku: '30522', name: '(2) גולד' }, { sku: '30530', name: '(3) טיטניום' }] },
+  { id: '30540', name: 'ריו MTI-310', dimensions: '230x230', equipments: [{ sku: '30546', name: '(3) טיטניום' }] },
+  { id: '30910', name: 'הורייזן MTI-313', dimensions: '250x220', equipments: [{ sku: '30912', name: '(3) טיטניום' }] },
+  { id: '30570', name: 'בטרפליי MTI-317', dimensions: '290x230', equipments: [{ sku: '30570-STD', name: '(3) טיטניום' }] },
+  { id: '30801', name: 'אטלנטיק MTI-308', dimensions: '300x220', equipments: [{ sku: '30835', name: '(2) גולד' }, { sku: '30830', name: '(3) טיטניום' }] },
+  { id: '361301', name: 'סופר אטלנטיק MTI-312', dimensions: '300x220', equipments: [{ sku: '31335', name: '(2) גולד' }, { sku: '31310', name: '(3) טיטניום' }] },
+  { id: '32100', name: 'ריבר בריכת זרמים MTI-321', dimensions: '400x220', isSwimSpa: true, equipments: [{ sku: '32100-STD', name: 'איבזור בריכת זרמים סטנדרט' }] },
+  { id: '32110', name: 'סווים בריכת זרמים MTI-323', dimensions: '400x225', isSwimSpa: true, equipments: [{ sku: '32110-STD', name: 'איבזור בריכת זרמים סטנדרט' }] },
+  { id: '32034', name: "ג'ואי בריכת זרמים MTI-322", dimensions: '480x220', isSwimSpa: true, equipments: [{ sku: '32034-STD', name: 'איבזור בריכת זרמים סטנדרט' }] },
+  { id: '32000', name: 'פרדייס בריכת זרמים MTI-320', dimensions: '550x220', isSwimSpa: true, equipments: [{ sku: '32000-STD', name: 'איבזור בריכת זרמים סטנדרט' }] },
+  { id: '34400', name: 'פסיפיק בריכת זרמים MTI-344', dimensions: '570x220', isSwimSpa: true, equipments: [{ sku: '34400-STD', name: 'איבזור בריכת זרמים משולבת' }] },
+  { id: '33000', name: 'אנדלס MTI-319', dimensions: '780x220', isSwimSpa: true, equipments: [{ sku: '33000-STD', name: 'איבזור בריכת זרמים' }] },
+  { id: '34500', name: 'אינפיניטי MTI-341', dimensions: '780x226', isSwimSpa: true, equipments: [{ sku: '34500-STD', name: 'איבזור אינפיניטי' }] },
+  { id: '34600', name: 'אינפיניטי MTI-345', dimensions: '880x226', isSwimSpa: true, equipments: [{ sku: '34600-STD', name: 'איבזור אינפיניטי' }] },
+  { id: '34300', name: 'אינפיניטי MTI-343', dimensions: '980x226', isSwimSpa: true, equipments: [{ sku: '34300-STD', name: 'איבזור אינפיניטי' }] },
+  { id: '30401', name: 'סאן עגול MTI-304', dimensions: 'קוטר 200', equipments: [{ sku: '30410', name: '(1) סילבר' }, { sku: '30420', name: '(2) גולד' }, { sku: '30430', name: '(3) טיטניום' }] },
+  { id: '30440', name: 'לונה עגול MTI-314', dimensions: 'קוטר 230', equipments: [{ sku: '30448', name: '(3) טיטניום' }] },
+];
+
+const MODELS: ModelItem[] = RAW_MODELS.map(model => ({
+  ...model,
+  equipments: [...model.equipments, { sku: 'CUSTOM', name: 'בהתאמה אישית' }]
+}));
+
+const ACRYLIC_COLORS = [
+  { code: 'LM-8001', name: 'פנינה', hex: '#f1f5f9', border: '#cbd5e1' },
+  { code: 'WT-6064', name: 'Pure White (לבן טהור)', hex: '#ffffff', border: '#cbd5e1' },
+  { code: 'MATT-WM', name: 'לבן שיש מט', hex: '#f8fafc', border: '#cbd5e1' },
+  { code: 'SS-6818', name: 'אפור עננים', hex: '#64748b', border: '#475569' },
+  { code: 'MB-6427', name: 'לבן שיש', hex: '#e2e8f0', border: '#cbd5e1' },
+  { code: 'BK-6252', name: 'שחור', hex: '#0f172a', border: '#020617' },
+  { code: 'MATT-WH', name: 'לבן מט', hex: '#f8fafc', border: '#cbd5e1' },
+  { code: 'SS-6807', name: 'מיד-נייט', hex: '#0b0f19', border: '#000000' },
+  { code: 'SS-6808', name: 'חום טוסקנה', hex: '#78350f', border: '#451a03' },
+];
+
+const CABINET_COLORS = [
+  { id: 'brown', name: 'חום בהיר - Brown', hex: '#8c6747' },
+  { id: 'dark-gray', name: 'אפור - Dark gray', hex: '#4b5563' },
+  { id: 'black', name: 'שחור - Black', hex: '#18181b' },
+  { id: 'cappuccino', name: 'קפוצ׳ינו', hex: '#a38068' },
+  { id: 'espresso-stripes', name: 'אספרסו פסים לרוחב', hex: '#2d1f18' },
+  { id: 'smoked-gray-stripes', name: 'אפור מעושן פסים לרוחב', hex: '#696969' },
+  { id: 'none', name: 'ללא חיפוי (קליפה בלבד)', hex: 'transparent' },
+];
+
+const INSTALLATION_TYPES = [
+  { id: 'above-ground', label: 'התקנה עילית', desc: 'מונח על ריצוף / משטח' },
+  { id: 'semi-inground', label: 'חצי שקועה', desc: 'שקוע בעומק 30-50 ס"מ' },
+  { id: 'fully-inground', label: 'שקועה לגמרי', desc: 'בתוך בור קו אפס' },
+];
+
+const SALES_ACCESSORIES = [
+  { id: 'lifter-cm1', category: 'מתקני הרמה לכיסוי', label: 'מתקן הרמה CoverMate I (מנוף ידני קל)' },
+  { id: 'lifter-cm3', category: 'מתקני הרמה לכיסוי', label: 'מתקן הרמה CoverMate III (בוכנה הידראולית)' },
+  { id: 'bar-spacaddy', category: 'ברים ושולחנות', label: 'מגש בר מסתובב מתכוונן SpaCaddy' },
+  { id: 'bar-fixed', category: 'ברים ושולחנות', label: 'דלפק בר מעוצב קבוע לספא + 2 כיסאות' },
+  { id: 'rail-safetrail', category: 'בטיחות וצל', label: 'ידית אחיזה וכניסה בטוחה Safe-T-Rail II' },
+  { id: 'umbrella-sun', category: 'בטיחות וצל', label: 'שמשיית ספא ייעודית SpaUmbrella (בד Sunbrella)' },
+  { id: 'steps-custom', category: 'מדרגות וסולם', label: 'מדרגות כניסה תואמות לגוון החיפוי' },
+  { id: 'audio-bt', category: 'מולטימדיה ופינוק', label: 'מערכת שמע Bluetooth + 2 רמקולים מוגני מים' },
+  { id: 'ozone-uv', category: 'חיטוי ובידוד', label: 'מערכת חיטוי אוזון / UV מתקדמת' },
+  { id: 'winter-insul', category: 'חיטוי ובידוד', label: 'בידוד תרמי מוגבר לחורף (שכבה כפולה)' },
+];
+
+const JETS_TOOLS = [
+  { type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15' },
+  { type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16' },
+  { type: 'jet-4', label: 'ג׳ט 4 אינץ׳', diameterMm: 101.6, shape: 'circle', color: '#ec4899' },
+  { type: 'jet-5', label: 'ג׳ט 5 אינץ׳', diameterMm: 127.0, shape: 'circle', color: '#1e3a8a' },
+  { type: 'suction-1.5', label: 'פתח יניקה 1.5 צול', diameterMm: 85.0, shape: 'circle', color: '#b91c1c' },
+  { type: 'suction-2', label: 'פתח יניקה 2 צול', diameterMm: 125.0, shape: 'circle', color: '#881337' },
+  { type: 'drain', label: 'ניקוז', diameterMm: 70.0, shape: 'circle', color: '#6b21a8' },
+  { type: 'led-light', label: 'פנס 5 אינץ׳', diameterMm: 127.0, shape: 'circle', color: '#eab308' },
+  { type: 'mini-led', label: 'מיני לד (היקפי/מים)', diameterMm: 20.0, shape: 'circle', color: '#15803d' },
+  { type: 'cabinet-led', label: 'פס תאורה לחיפוי', widthMm: 200.0, heightMm: 12.0, diameterMm: 0, shape: 'rect', color: '#f59e0b' },
+  { type: 'air-control', label: 'וסת אוויר (ללא לד)', diameterMm: 75.0, shape: 'circle', color: '#94a3b8' },
+  { type: 'skimmer', label: 'סקימר מצוף', diameterMm: 160.0, shape: 'circle', color: '#0f172a' },
+  { type: 'panel-tp500', label: 'פאנל קטן Balboa TP500', widthMm: 165.0, heightMm: 57.0, diameterMm: 0, shape: 'oval', color: '#f97316' },
+  { type: 'panel-tp700', label: 'פאנל Balboa TP700', widthMm: 254.0, heightMm: 89.0, diameterMm: 0, shape: 'oval', color: '#0369a1' },
+  { type: 'panel-st4', label: 'פאנל מגע Balboa ST4', widthMm: 146.0, heightMm: 102.0, diameterMm: 0, shape: 'rect', color: '#0f172a' },
+];
+
+const getModelMaxDimensionMm = (dimensionsStr: string) => {
+  const nums = dimensionsStr.match(/\d+/g);
+  if (!nums) return 2050;
+  const maxCm = Math.max(...nums.map(Number));
+  return maxCm * 10;
+};
+
+const getPresetKey = (modelId: string, sku: string) => `${modelId}_${sku}`;
+
+const generateFallbackLayout = (): PlacedItem[] => {
+  return [
+    { id: `std-${Date.now()}-1`, type: 'suction-2', label: 'פתח יניקה 2 צול', diameterMm: 125.0, shape: 'circle', color: '#881337', x: 260, y: 345 },
+    { id: `std-${Date.now()}-2`, type: 'suction-2', label: 'פתח יניקה 2 צול', diameterMm: 125.0, shape: 'circle', color: '#881337', x: 380, y: 345 },
+    { id: `std-${Date.now()}-3`, type: 'led-light', label: 'פנס 5 אינץ׳', diameterMm: 127.0, shape: 'circle', color: '#eab308', x: 320, y: 320 },
+    { id: `std-${Date.now()}-4`, type: 'panel-tp500', label: 'פאנל קטן Balboa TP500', widthMm: 165.0, heightMm: 57.0, diameterMm: 0, shape: 'oval', rotation: 0, color: '#f97316', x: 395, y: 40 },
+  ];
+};
+
+const POLARIS_URBAN_PRESET: PlacedItem[] = [
+  { id: 'pu-panel', type: 'panel-tp500', label: 'פאנל קטן TP500', widthMm: 165, heightMm: 57, diameterMm: 0, shape: 'oval', rotation: 0, color: '#f97316', x: 395, y: 40 },
+  { id: 'pu-air', type: 'air-control', label: 'וסת אוויר (ללא לד)', diameterMm: 75, shape: 'circle', color: '#94a3b8', x: 180, y: 45 },
+  { id: 'pu-light-5', type: 'led-light', label: 'פנס 5 אינץ׳', diameterMm: 127, shape: 'circle', color: '#eab308', x: 300, y: 155 },
+  { id: 'pu-suction-2', type: 'suction-2', label: 'יניקה 2 צול', diameterMm: 125, shape: 'circle', color: '#881337', x: 295, y: 245 },
+  { id: 'pu-drain', type: 'drain', label: 'ניקוז', diameterMm: 70, shape: 'circle', color: '#6b21a8', x: 295, y: 285 },
+  { id: 'pu-j3-1', type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16', x: 145, y: 165 },
+  { id: 'pu-j2-1', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 90, y: 145 },
+  { id: 'pu-j2-2', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 110, y: 125 },
+  { id: 'pu-j2-3', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 130, y: 105 },
+  { id: 'pu-j4-1', type: 'jet-4', label: 'ג׳ט 4 אינץ׳', diameterMm: 101.6, shape: 'circle', color: '#ec4899', x: 450, y: 195 },
+  { id: 'pu-j3-2', type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16', x: 480, y: 135 },
+  { id: 'pu-j3-3', type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16', x: 505, y: 160 },
+  { id: 'pu-j3-5', type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16', x: 235, y: 260 },
+  { id: 'pu-j2-4', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 72, y: 300 },
+  { id: 'pu-j2-5', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 72, y: 335 },
+  { id: 'pu-j2-6', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 72, y: 370 },
+  { id: 'pu-j4-2', type: 'jet-4', label: 'ג׳ט 4 אינץ׳', diameterMm: 101.6, shape: 'circle', color: '#ec4899', x: 145, y: 500 },
+  { id: 'pu-j3-4', type: 'jet-3', label: 'ג׳ט 3 אינץ׳', diameterMm: 76.2, shape: 'circle', color: '#84cc16', x: 82, y: 500 },
+  { id: 'pu-j2-7', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 82, y: 460 },
+  { id: 'pu-j2-8', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 82, y: 540 },
+  { id: 'pu-j4-3', type: 'jet-4', label: 'ג׳ט 4 אינץ׳', diameterMm: 101.6, shape: 'circle', color: '#ec4899', x: 518, y: 395 },
+  { id: 'pu-j2-9', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 545, y: 395 },
+  { id: 'pu-skimmer', type: 'skimmer', label: 'סקימר מצוף', diameterMm: 160, shape: 'circle', color: '#0f172a', x: 515, y: 535 },
+  { id: 'pu-j2-10', type: 'jet-2', label: 'ג׳ט 2 אינץ׳', diameterMm: 50.8, shape: 'circle', color: '#facc15', x: 445, y: 520 },
+  { id: 'pu-mled-1', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 185, y: 70 },
+  { id: 'pu-mled-2', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 430, y: 85 },
+  { id: 'pu-mled-3', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 550, y: 220 },
+  { id: 'pu-mled-4', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 565, y: 320 },
+  { id: 'pu-mled-5', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 560, y: 445 },
+  { id: 'pu-mled-6', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 575, y: 545 },
+  { id: 'pu-mled-7', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 450, y: 605 },
+  { id: 'pu-mled-8', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 300, y: 605 },
+  { id: 'pu-mled-9', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 175, y: 605 },
+  { id: 'pu-mled-10', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 68, y: 570 },
+  { id: 'pu-mled-11', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 60, y: 220 },
+];
+
+function SpaProductionPage() {
+  const [activeTab, setActiveTab] = useState<'sales' | 'production' | 'warehouse' | 'archive' | 'presets'>('sales');
+
+  const [orders, setOrders] = useState<OrderData[]>([]);
+  const [presets, setPresets] = useState<Record<string, PlacedItem[]>>({});
+
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [serialDigits, setSerialDigits] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState(MODELS[1].id);
+  const [selectedEquipmentSku, setSelectedEquipmentSku] = useState(MODELS[1].equipments[0].sku);
+  const [modelSearch, setModelSearch] = useState('');
+  const [selectedAcrylicCode, setSelectedAcrylicCode] = useState(ACRYLIC_COLORS[0].code);
+  const [selectedCabinet, setSelectedCabinet] = useState(CABINET_COLORS[0].id);
+  const [selectedPhase, setSelectedPhase] = useState<'single' | 'three'>('three');
+  const [installationType, setInstallationType] = useState<'above-ground' | 'semi-inground' | 'fully-inground'>('above-ground');
+  const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
+  const [lightedSidesCount, setLightedSidesCount] = useState<number>(0);
+  const [salesNotes, setSalesNotes] = useState<string>('');
+
+  const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [modelImageSrc, setModelImageSrc] = useState<string>(`models/${MODELS[1].id}.jpeg`);
+
+  const [presetModelId, setPresetModelId] = useState(MODELS[1].id);
+  const [presetEquipmentSku, setPresetEquipmentSku] = useState(MODELS[1].equipments[0].sku);
+  const [presetPlacedItems, setPresetPlacedItems] = useState<PlacedItem[]>([]);
+  const [presetSelectedItemId, setPresetSelectedItemId] = useState<string | null>(null);
+  const [presetModelImageSrc, setPresetModelImageSrc] = useState<string>(`models/${MODELS[1].id}.jpeg`);
+
+  const getLayoutFor = (mId: string, sku: string, currentPresets: Record<string, PlacedItem[]>): PlacedItem[] => {
+    const key = getPresetKey(mId, sku);
+    if (currentPresets && currentPresets[key]) {
+      return currentPresets[key].map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` }));
+    }
+    if (sku === 'CUSTOM') {
+      return generateFallbackLayout();
+    }
+    if (mId === '30101' && sku === '30115') {
+      return POLARIS_URBAN_PRESET.map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` }));
+    }
+    return POLARIS_URBAN_PRESET.map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` }));
+  };
+
+  useEffect(() => {
+    const savedOrders = localStorage.getItem('mes_spa_orders');
+    if (savedOrders) {
+      try { setOrders(JSON.parse(savedOrders)); } catch (e) { console.error(e); }
+    }
+    let loadedPresets: Record<string, PlacedItem[]> = {};
+    const savedPresets = localStorage.getItem('mes_spa_presets');
+    if (savedPresets) {
+      try { loadedPresets = JSON.parse(savedPresets); setPresets(loadedPresets); } catch (e) { console.error(e); }
+    }
+    const initial = getLayoutFor(MODELS[1].id, MODELS[1].equipments[0].sku, loadedPresets);
+    setPlacedItems(initial);
+    setPresetPlacedItems(initial);
+  }, []);
+
+  useEffect(() => {
+    const testExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+    let found = false;
+    testExtensions.forEach((ext) => {
+      const testImg = new window.Image();
+      testImg.src = `models/${selectedModelId}.${ext}`;
+      testImg.onload = () => { if (!found) { found = true; setModelImageSrc(`/models/${selectedModelId}.${ext}`); } };
+    });
+  }, [selectedModelId]);
+
+  useEffect(() => {
+    const testExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+    let found = false;
+    testExtensions.forEach((ext) => {
+      const testImg = new window.Image();
+      testImg.src = `models/${presetModelId}.${ext}`;
+      testImg.onload = () => { if (!found) { found = true; setPresetModelImageSrc(`/models/${presetModelId}.${ext}`); } };
+    });
+  }, [presetModelId]);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const presetSvgRef = useRef<SVGSVGElement | null>(null);
+  const [presetDraggingId, setPresetDraggingId] = useState<string | null>(null);
+  const [presetDragOffset, setPresetDragOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeTag = document.activeElement?.tagName.toLowerCase();
+        if (activeTag === 'input' || activeTag === 'textarea') return;
+
+        if (activeTab === 'production' && selectedItemId) {
+          setPlacedItems(prev => prev.filter(it => it.id !== selectedItemId));
+          setSelectedItemId(null);
+        } else if (activeTab === 'presets' && presetSelectedItemId) {
+          setPresetPlacedItems(prev => prev.filter(it => it.id !== presetSelectedItemId));
+          setPresetSelectedItemId(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, selectedItemId, presetSelectedItemId]);
+
+  const addJetToCanvas = (tool: typeof JETS_TOOLS[0]) => {
+    const newItem: PlacedItem = {
+      id: `item-${Date.now()}`, type: tool.type, label: tool.label, x: 320, y: 320,
+      diameterMm: tool.diameterMm, widthMm: tool.widthMm, heightMm: tool.heightMm,
+      shape: (tool.shape as 'circle' | 'oval' | 'rect') || 'circle', rotation: 0, color: tool.color
+    };
+    setPlacedItems(prev => [...prev, newItem]);
+    setSelectedItemId(newItem.id);
+  };
+
+  const rotatePlacedItem = (id: string) => {
+    setPlacedItems(prev => prev.map(it => it.id === id ? { ...it, rotation: ((it.rotation || 0) + 90) % 360 } : it));
+  };
+
+  const handlePointerDown = (item: PlacedItem, e: React.PointerEvent) => {
+    e.stopPropagation(); setSelectedItemId(item.id); setDraggingId(item.id);
+    if (svgRef.current) {
+      const rect = svgRef.current.getBoundingClientRect();
+      const scaleX = 640 / rect.width; const scaleY = 640 / rect.height;
+      setDragOffset({ x: (e.clientX - rect.left) * scaleX - item.x, y: (e.clientY - rect.top) * scaleY - item.y });
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!draggingId || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const scaleX = 640 / rect.width; const scaleY = 640 / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX; const mouseY = (e.clientY - rect.top) * scaleY;
+    setPlacedItems(prev => prev.map(it => it.id === draggingId ? { ...it, x: Math.max(10, Math.min(630, mouseX - dragOffset.x)), y: Math.max(10, Math.min(630, mouseY - dragOffset.y)) } : it));
+  };
+  const handlePointerUp = () => setDraggingId(null);
+
+  const addJetToPreset = (tool: typeof JETS_TOOLS[0]) => {
+    const newItem: PlacedItem = {
+      id: `preset-${Date.now()}`, type: tool.type, label: tool.label, x: 320, y: 320,
+      diameterMm: tool.diameterMm, widthMm: tool.widthMm, heightMm: tool.heightMm,
+      shape: (tool.shape as 'circle' | 'oval' | 'rect') || 'circle', rotation: 0, color: tool.color
+    };
+    setPresetPlacedItems(prev => [...prev, newItem]);
+    setPresetSelectedItemId(newItem.id);
+  };
+
+  const rotatePresetItem = (id: string) => {
+    setPresetPlacedItems(prev => prev.map(it => it.id === id ? { ...it, rotation: ((it.rotation || 0) + 90) % 360 } : it));
+  };
+
+  const handlePresetPointerDown = (item: PlacedItem, e: React.PointerEvent) => {
+    e.stopPropagation(); setPresetSelectedItemId(item.id); setPresetDraggingId(item.id);
+    if (presetSvgRef.current) {
+      const rect = presetSvgRef.current.getBoundingClientRect();
+      const scaleX = 640 / rect.width; const scaleY = 640 / rect.height;
+      setPresetDragOffset({ x: (e.clientX - rect.left) * scaleX - item.x, y: (e.clientY - rect.top) * scaleY - item.y });
+    }
+  };
+  const handlePresetPointerMove = (e: React.PointerEvent) => {
+    if (!presetDraggingId || !presetSvgRef.current) return;
+    const rect = presetSvgRef.current.getBoundingClientRect();
+    const scaleX = 640 / rect.width; const scaleY = 640 / rect.height;
+    const mouseX = (e.clientX - rect.left) * scaleX; const mouseY = (e.clientY - rect.top) * scaleY;
+    setPresetPlacedItems(prev => prev.map(it => it.id === presetDraggingId ? { ...it, x: Math.max(10, Math.min(630, mouseX - presetDragOffset.x)), y: Math.max(10, Math.min(630, mouseY - presetDragOffset.y)) } : it));
+  };
+  const handlePresetPointerUp = () => setPresetDraggingId(null);
+
+  const savePreset = () => {
+    const key = getPresetKey(presetModelId, presetEquipmentSku);
+    const updatedPresets = { ...presets, [key]: presetPlacedItems };
+    setPresets(updatedPresets);
+    localStorage.setItem('mes_spa_presets', JSON.stringify(updatedPresets));
+
+    if (selectedModelId === presetModelId && selectedEquipmentSku === presetEquipmentSku) {
+      setPlacedItems(presetPlacedItems.map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` })));
+    }
+    alert('תבנית היצרן נשמרה בזיכרון וסונכרנה בהצלחה!');
+  };
+
+  const clearPresetCanvas = () => {
+    if (confirm('האם לנקות את כל המשטח?')) {
+      setPresetPlacedItems([]);
+      setPresetSelectedItemId(null);
+    }
+  };
+
+  const handleSerialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, '');
+    if (val.length <= 4) setSerialDigits(val);
+  };
+
+  const handleModelSelect = (modelId: string) => {
+    setSelectedModelId(modelId);
+    const m = MODELS.find((item) => item.id === modelId);
+    if (m) {
+      const firstSku = m.equipments.length > 0 ? m.equipments[0].sku : '';
+      if (firstSku) setSelectedEquipmentSku(firstSku);
+      if (m.isSwimSpa) setSelectedAcrylicCode('MB-6427');
+      setPlacedItems(getLayoutFor(modelId, firstSku, presets));
+    }
+  };
+
+  const handleEquipmentSelect = (sku: string) => {
+    setSelectedEquipmentSku(sku);
+    setPlacedItems(getLayoutFor(selectedModelId, sku, presets));
+  };
+
+  const resetToStandardPreset = () => {
+    if (confirm('האם לרענן ולטעון את הפריסה המקורית של האיבזור הזה?')) {
+      setPlacedItems(getLayoutFor(selectedModelId, selectedEquipmentSku, presets));
+      setSelectedItemId(null);
+    }
+  };
+
+  const toggleAccessory = (id: string) => {
+    setSelectedAccessories(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+  };
+
+  const resetToNewOrder = () => {
+    setEditingOrderId(null);
+    setSerialDigits('');
+    setSelectedModelId(MODELS[1].id);
+    const defaultSku = MODELS[1].equipments[0].sku;
+    setSelectedEquipmentSku(defaultSku);
+    setSelectedAcrylicCode(ACRYLIC_COLORS[0].code);
+    setSelectedCabinet(CABINET_COLORS[0].id);
+    setSelectedPhase('three');
+    setInstallationType('above-ground');
+    setSelectedAccessories([]);
+    setLightedSidesCount(0);
+    setSalesNotes('');
+    setPlacedItems(getLayoutFor(MODELS[1].id, defaultSku, presets));
+    setActiveTab('sales');
+  };
+
+  const goToProduction = () => {
+    if (serialDigits.length !== 4) {
+      alert('נא להזין 4 ספרות למספר הג׳קוזי בשלב המכירתי לפני מעבר לשרטוט (אופציונלי)');
+    }
+    setActiveTab('production');
+  };
+
+  const handleSaveOrder = (status: 'draft' | 'final') => {
+    if (status === 'final' && serialDigits.length !== 4) {
+      alert('חובה להקצות מספר ספא תקין (4 ספרות) על ידי האיש הטכני לפני סגירת הפקודה לייצור!');
+      return;
+    }
+    const orderToSave: OrderData = {
+      id: editingOrderId || `order-${Date.now()}`,
+      serialDigits: serialDigits || '',
+      selectedModelId, selectedEquipmentSku, selectedAcrylicCode, selectedCabinet, selectedPhase,
+      installationType, selectedAccessories, lightedSidesCount, salesNotes, placedItems, status, updatedAt: Date.now()
+    };
+    let updated = [...orders];
+    if (editingOrderId) updated = updated.map(o => o.id === editingOrderId ? orderToSave : o);
+    else { updated.push(orderToSave); setEditingOrderId(orderToSave.id); }
+    setOrders(updated);
+    localStorage.setItem('mes_spa_orders', JSON.stringify(updated));
+    if (status === 'draft') alert('ההזמנה נשמרה כטיוטה בהצלחה!');
+    else { alert(`פקודת עבודה לספא מס׳ ${serialDigits} נסגרה ואושרה לייצור בהצלחה!`); setActiveTab('archive'); }
+  };
+
+  const loadOrder = (order: OrderData) => {
+    setEditingOrderId(order.id); setSerialDigits(order.serialDigits); setSelectedModelId(order.selectedModelId); setSelectedEquipmentSku(order.selectedEquipmentSku); setSelectedAcrylicCode(order.selectedAcrylicCode); setSelectedCabinet(order.selectedCabinet); setSelectedPhase(order.selectedPhase);
+    setInstallationType(order.installationType || 'above-ground');
+    setSelectedAccessories(order.selectedAccessories); setLightedSidesCount(order.lightedSidesCount || 0);
+    setSalesNotes(order.salesNotes || '');
+    setPlacedItems(order.placedItems.length > 0 ? order.placedItems : getLayoutFor(order.selectedModelId, order.selectedEquipmentSku, presets));
+    setActiveTab('sales');
+  };
+
+  const deleteOrder = (id: string) => {
+    if (confirm('האם למחוק הזמנה זו מהארכיון?')) {
+      const updated = orders.filter(o => o.id !== id);
+      setOrders(updated); localStorage.setItem('mes_spa_orders', JSON.stringify(updated));
+    }
+  };
+
+  const filteredModels = MODELS.filter(m => m.name.includes(modelSearch) || m.id.includes(modelSearch) || m.dimensions.includes(modelSearch));
+  const currentModelObj = MODELS.find(m => m.id === selectedModelId);
+  const currentEquipmentObj = currentModelObj?.equipments.find(eq => eq.sku === selectedEquipmentSku) || currentModelObj?.equipments[0];
+  const currentAcrylicObj = ACRYLIC_COLORS.find(a => a.code === selectedAcrylicCode);
+  const currentCabinetObj = CABINET_COLORS.find(c => c.id === selectedCabinet);
+  const fullSpaTitle = serialDigits ? `ספא מס' ${serialDigits}` : 'טרם הוקצה מספר ספא';
+  const availableAcrylics = currentModelObj?.isSwimSpa ? ACRYLIC_COLORS.filter(c => c.code === 'MB-6427') : ACRYLIC_COLORS;
+
+  const scalePxPerMmOrder = 640 / getModelMaxDimensionMm(currentModelObj?.dimensions || '205');
+  const presetModelObj = MODELS.find(m => m.id === presetModelId);
+  const scalePxPerMmPreset = 640 / getModelMaxDimensionMm(presetModelObj?.dimensions || '205');
+
+  const groupedParts = placedItems.reduce((acc, item) => {
+    if (!acc[item.label]) acc[item.label] = { count: 0, color: item.color };
+    acc[item.label].count += 1;
+    return acc;
+  }, {} as Record<string, { count: number, color: string }>);
+
+  const selectedItemObj = placedItems.find(it => it.id === selectedItemId);
+  const isSelectedPanel = selectedItemObj?.shape === 'oval' || selectedItemObj?.shape === 'rect';
+
+  const presetSelectedItemObj = presetPlacedItems.find(it => it.id === presetSelectedItemId);
+  const isPresetSelectedPanel = presetSelectedItemObj?.shape === 'oval' || presetSelectedItemObj?.shape === 'rect';
+
+  const renderItemGraphic = (item: PlacedItem, scale: number) => {
+    const isOval = item.shape === 'oval';
+    const isRect = item.shape === 'rect';
+
+    if (item.type === 'cabinet-led') {
+      const w = (item.widthMm || 200) * scale;
+      const h = (item.heightMm || 12) * scale;
+      return (
+        <g filter="drop-shadow(0px 0px 4px #fbbf24)">
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} fill="#ea580c" />
+          <rect x={-w / 2 + 1} y={-h / 2 + 1} width={w - 2} height={h - 2} rx={(h - 2) / 2} fill="#fef08a" />
+        </g>
+      );
+    }
+
+    if (isOval) {
+      const w = (item.widthMm || 165) * scale;
+      const h = (item.heightMm || 57) * scale;
+
+      if (item.type === 'panel-tp500') {
+        return (
+          <g>
+            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} ry={h / 2} fill="#ea580c" stroke="#fed7aa" strokeWidth="1.5" />
+            <rect x={-w * 0.18} y={-h * 0.28} width={w * 0.36} height={h * 0.56} rx="2" fill="#ffffff" />
+            <circle cx={-w * 0.34} cy="0" r={h * 0.14} fill="#ffffff" />
+            <circle cx={w * 0.34} cy="0" r={h * 0.14} fill="#ffffff" />
+          </g>
+        );
+      }
+      return (
+        <g>
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={h / 2} ry={h / 2} fill="#e2e8f0" stroke="#475569" strokeWidth="1.8" />
+          <rect x={-w / 2 + 2} y={-h / 2 + 2} width={w - 4} height={h - 4} rx={(h - 4) / 2} ry={(h - 4) / 2} fill="#0f172a" />
+          <rect x={-w * 0.18} y={-h * 0.35} width={w * 0.36} height={h * 0.7} rx="2.5" fill="#0284c7" stroke="#38bdf8" strokeWidth="0.8" />
+          <circle cx={-w * 0.36} cy="0" r={h * 0.16} fill="#38bdf8" />
+          <circle cx={w * 0.33} cy={-h * 0.22} r={h * 0.13} fill="#38bdf8" />
+        </g>
+      );
+    }
+
+    if (isRect) {
+      const w = (item.widthMm || 146) * scale;
+      const h = (item.heightMm || 102) * scale;
+      return (
+        <g>
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx="5" ry="5" fill="#09090b" stroke="#94a3b8" strokeWidth="1.8" />
+          <rect x={-w / 2 + 2.5} y={-h / 2 + 2.5} width={w - 5} height={h - 5} rx="3" ry="3" fill="#0369a1" stroke="#38bdf8" strokeWidth="0.8" />
+          <text x="0" y={h * 0.1} textAnchor="middle" fill="#ffffff" fontSize={h * 0.22} fontWeight="bold" fontFamily="sans-serif">ST4</text>
+        </g>
+      );
+    }
+
+    if (item.type === 'mini-led') {
+      const r = (item.diameterMm * scale) / 2;
+      return (
+        <g>
+          <circle r={r + 1.5} fill="#14532d" opacity="0.4" />
+          <circle r={r} fill="#16a34a" stroke="#ffffff" strokeWidth="1" filter="drop-shadow(0px 0px 3px #22c55e)" />
+          <circle r={r * 0.4} fill="#ffffff" />
+        </g>
+      );
+    }
+
+    if (item.type === 'skimmer') {
+      const r = (item.diameterMm * scale) / 2;
+      return (
+        <g>
+          <circle r={r} fill="#0f172a" stroke="#ffffff" strokeWidth="2" filter="drop-shadow(0px 3px 6px rgba(0,0,0,0.4))" />
+          <text x="0" y="-3" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold" fontFamily="sans-serif">סקימר</text>
+          <text x="0" y="9" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold" fontFamily="sans-serif">מצוף</text>
+        </g>
+      );
+    }
+
+    if (item.type === 'drain') {
+      const r = (item.diameterMm * scale) / 2;
+      return (
+        <g>
+          <circle r={r} fill="#6b21a8" stroke="#ffffff" strokeWidth="1.5" />
+          <circle r={r * 0.5} fill="#4c1d95" />
+        </g>
+      );
+    }
+
+    if (item.type === 'air-control') {
+      const r = (item.diameterMm * scale) / 2;
+      return (
+        <g>
+          <circle r={r} fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+          <circle r={r * 0.6} fill="#64748b" />
+          <line x1="0" y1={-r * 0.5} x2="0" y2={r * 0.5} stroke="#ffffff" strokeWidth="1.5" />
+        </g>
+      );
+    }
+
+    const visualRadius = (item.diameterMm * scale) / 2;
+    return (
+      <g>
+        <circle r={visualRadius} fill={item.color} stroke="#ffffff" strokeWidth={visualRadius > 10 ? "1.5" : "0.75"} filter="drop-shadow(0px 2px 4px rgba(0,0,0,0.4))" />
+        <circle cx={-visualRadius * 0.3} cy={-visualRadius * 0.3} r={visualRadius * 0.4} fill="#ffffff" opacity="0.35" />
+        <circle r={visualRadius * 0.8} fill="none" stroke="#000000" strokeWidth="0.5" opacity="0.15" />
+        <line x1={-visualRadius / 2} y1="0" x2={visualRadius / 2} y2="0" stroke="#ffffff" strokeWidth="1" opacity="0.8" />
+        <line x1="0" y1={-visualRadius / 2} x2="0" y2={visualRadius / 2} stroke="#ffffff" strokeWidth="1" opacity="0.8" />
+      </g>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans select-none flex flex-col print:bg-white" dir="rtl">
+
+      {/* סרגל עליון */}
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between sticky top-0 z-30 shadow-sm gap-4 print:hidden">
+        <div className="flex items-center gap-3">
+          <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow">
+            <Box size={22} />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">M.T.I - מערכת ייצור</h1>
+            <p className="text-xs text-slate-500">
+              {activeTab === 'sales' && 'שלב 1: מפרט הזמנה (תצוגה שיווקית)'}
+              {activeTab === 'production' && `שלב 2: תכנון הנדסי ושרטוט - ${fullSpaTitle}`}
+              {activeTab === 'warehouse' && 'שלב 3: רשימת ליקוט רכיבים למחסן'}
+              {activeTab === 'archive' && 'ארכיון הזמנות וטיוטות פתוחות'}
+              {activeTab === 'presets' && 'עורך תבניות יצרן - הגדרות ברירת מחדל'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+          <button onClick={() => setActiveTab('sales')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'sales' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+            <ShoppingCart size={16} /> <span className="hidden md:inline">1.</span> מכירתי
+          </button>
+          <button onClick={goToProduction} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'production' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+            <Compass size={16} /> <span className="hidden md:inline">2.</span> תכנון
+          </button>
+          <button onClick={() => setActiveTab('warehouse')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+            <ClipboardList size={16} /> <span className="hidden md:inline">3.</span> ליקוט למחסן
+          </button>
+          <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'archive' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+            <Archive size={16} /> <span className="hidden md:inline">4.</span> ארכיון ({orders.length})
+          </button>
+          <button onClick={() => setActiveTab('presets')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'presets' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+            <Settings size={16} /> <span className="hidden md:inline">5.</span> תבניות
+          </button>
+        </div>
+      </header>
+
+      {activeTab === 'sales' && (
+        <main className="max-w-7xl mx-auto p-6 md:p-8 w-full flex flex-col lg:flex-row gap-8">
+          <div className="flex-1 space-y-6">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <span className="bg-white/20 text-xs px-3 py-1 rounded-full font-semibold uppercase tracking-wider">שלב מכירות ללקוח</span>
+                <h2 className="text-2xl font-bold mt-2">בניית מערכת ספא אישית</h2>
+                <p className="text-blue-100 text-sm mt-1">בחר דגם, גוונים ואביזרים. כל בחירה משתקפת מיד בסיכום ההזמנה.</p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <label className="text-base font-bold text-slate-900 flex items-center gap-2"><Layers className="text-blue-600" size={20} /> 1. בחירת דגם ג׳קוזי</label>
+                <div className="relative">
+                  <Search size={16} className="absolute right-3 top-2.5 text-slate-400" />
+                  <input type="text" placeholder="חפש דגם / מק״ט..." value={modelSearch} onChange={(e) => setModelSearch(e.target.value)} className="pr-9 pl-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none w-full sm:w-64 transition" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-1 border border-slate-100 rounded-2xl">
+                {filteredModels.map((model) => (
+                  <button type="button" key={model.id} onClick={() => handleModelSelect(model.id)} className={`p-4 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedModelId === model.id ? 'border-blue-600 bg-blue-50/50 font-semibold text-blue-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300 text-slate-700'}`}>
+                    <div>
+                      <div className="text-xs text-blue-600 font-mono font-bold mb-1">מק״ט {model.id}</div>
+                      <div className="text-base font-bold text-slate-900">{model.name}</div>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">{model.dimensions} ס"מ</div>
+                    </div>
+                    {selectedModelId === model.id ? <CheckCircle2 size={24} className="text-blue-600 shrink-0" /> : <div className="w-6 h-6 rounded-full border-2 border-slate-200 shrink-0"></div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Wrench className="text-blue-600" size={20} /> 2. רמת איבזור (מערכות ג׳טים)</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {currentModelObj?.equipments.map((eq) => (
+                  <button type="button" key={eq.sku} onClick={() => handleEquipmentSelect(eq.sku)} className={`p-4 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedEquipmentSku === eq.sku ? 'border-blue-600 bg-blue-50/50 font-semibold text-blue-950 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-700'}`}>
+                    <div>
+                      <div className="text-[11px] font-mono text-blue-600 font-bold mb-1">{eq.sku !== 'CUSTOM' ? `מק״ט: ${eq.sku}` : 'עיצוב פתוח'}</div>
+                      <div className="text-sm font-bold">{eq.name}</div>
+                    </div>
+                    {selectedEquipmentSku === eq.sku && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><ArrowDownToLine className="text-emerald-600" size={20} /> 3. סוג התקנה</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {INSTALLATION_TYPES.map((type) => (
+                  <button type="button" key={type.id} onClick={() => setInstallationType(type.id as any)} className={`p-4 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${installationType === type.id ? 'border-emerald-600 bg-emerald-50/50 font-semibold text-emerald-950 ring-2 ring-emerald-600/20' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 text-slate-700'}`}>
+                    <div>
+                      <div className="text-sm font-bold mb-0.5">{type.label}</div>
+                      <div className="text-[11px] text-slate-500">{type.desc}</div>
+                    </div>
+                    {installationType === type.id && <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-blue-600" size={20} /> 4. צבע קליפת אקריליק</label>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  {availableAcrylics.map((color) => (
+                    <button type="button" key={color.code} onClick={() => setSelectedAcrylicCode(color.code)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedAcrylicCode === color.code ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
+                      <div className="flex items-center gap-4">
+                        <span className="w-8 h-8 rounded-full border shadow-sm shrink-0" style={{ backgroundColor: color.hex, borderColor: color.border }}></span>
+                        <div className="text-sm">
+                          <span className="text-slate-900 font-bold">{color.name}</span>
+                          <span className="font-mono text-slate-400 text-[11px] block">{color.code}</span>
+                        </div>
+                      </div>
+                      {selectedAcrylicCode === color.code && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                  {CABINET_COLORS.map((cab) => (
+                    <button type="button" key={cab.id} onClick={() => setSelectedCabinet(cab.id)} className={`w-full p-3 rounded-2xl border text-right transition flex items-center justify-between cursor-pointer ${selectedCabinet === cab.id ? 'border-blue-600 bg-blue-50/50 font-semibold text-slate-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-white hover:border-blue-300'}`}>
+                      <div className="flex items-center gap-4">
+                        {cab.hex === 'transparent' ? (
+                          <div className="w-8 h-8 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
+                        ) : (
+                          <span className="w-8 h-8 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: cab.hex }}></span>
+                        )}
+                        <span className="text-sm font-bold text-slate-900">{cab.name}</span>
+                      </div>
+                      {selectedCabinet === cab.id && <CheckCircle2 size={20} className="text-blue-600 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Lightbulb className="text-amber-500" size={20} /> 6. פסי תאורה לחיפוי</label>
+                <div className="flex items-center gap-4">
+                  <select
+                    value={lightedSidesCount}
+                    onChange={(e) => setLightedSidesCount(Number(e.target.value))}
+                    className="p-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 font-bold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 w-full transition cursor-pointer"
+                  >
+                    {[...Array(13)].map((_, i) => (
+                      <option key={i} value={i}>{i === 0 ? 'ללא תאורה' : `${i} פסי לד`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Zap className="text-blue-600" size={20} /> 7. חיבור חשמל</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setSelectedPhase('single')} className={`py-3 px-4 rounded-2xl border text-center transition text-sm font-bold cursor-pointer ${selectedPhase === 'single' ? 'border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                    חד פאזי
+                  </button>
+                  <button type="button" onClick={() => setSelectedPhase('three')} className={`py-3 px-4 rounded-2xl border text-center transition text-sm font-bold cursor-pointer ${selectedPhase === 'three' ? 'border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                    תלת פאזי
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <div className="mb-6">
+                <label className="text-lg font-bold text-slate-900 flex items-center gap-2"><Award className="text-amber-500" size={24} /> 8. תוספות שדרוג ויוקרה</label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {SALES_ACCESSORIES.map((acc) => {
+                  const isChecked = selectedAccessories.includes(acc.id);
+                  return (
+                    <button type="button" key={acc.id} onClick={() => toggleAccessory(acc.id)} className={`p-4 rounded-2xl border text-right transition flex items-start justify-between cursor-pointer ${isChecked ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50/40 hover:border-blue-300'}`}>
+                      <div>
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md mb-2 inline-block">{acc.category}</span>
+                        <div className={`text-sm font-bold ${isChecked ? 'text-blue-950' : 'text-slate-700'}`}>{acc.label}</div>
+                      </div>
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 mt-1 ${isChecked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'}`}>{isChecked && <Check size={16} strokeWidth={3} />}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <div className="mb-4">
+                <label className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <MessageSquare className="text-blue-600" size={24} /> 9. הערות ורשמים מהשיחה עם הלקוח
+                </label>
+                <p className="text-sm text-slate-500 mt-1">רשום כאן כל פרט רלוונטי, בקשות מיוחדות, דגשים להתקנה או הערות לייצור שיעברו למחסנאי.</p>
+              </div>
+              <textarea
+                value={salesNotes}
+                onChange={(e) => setSalesNotes(e.target.value)}
+                placeholder="הקלד את הערותיך כאן..."
+                className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 text-sm focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition min-h-[120px] resize-y"
+              />
+            </div>
+
+            <div className="pt-4 flex flex-col sm:flex-row gap-4">
+              <button type="button" onClick={() => handleSaveOrder('draft')} className="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-base transition cursor-pointer">
+                <Save size={18} /> שמור טיוטה (המשך אחר כך)
+              </button>
+              <button type="button" onClick={goToProduction} className="flex-[2] flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-lg shadow-blue-600/20 transition cursor-pointer">
+                <span>המשך לשלב 2: תכנון הנדסי ושרטוט</span> <ArrowLeft size={20} />
+              </button>
+            </div>
+          </div>
+
+          <aside className="w-full lg:w-[380px] shrink-0">
+            <div className="sticky top-24 bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
+              <div className="relative h-56 bg-slate-100 flex items-center justify-center border-b border-slate-200">
+                <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 border border-slate-200">
+                  <Sparkles size={14} className="text-amber-500" />
+                  <span className="text-[10px] font-bold text-slate-800 uppercase tracking-widest">Live Preview</span>
+                </div>
+                <img src={modelImageSrc} alt={currentModelObj?.name} className="object-contain h-[90%] w-[90%] mix-blend-multiply transition-opacity duration-500" />
+              </div>
+
+              <div className="p-6 flex flex-col flex-1">
+                <div className="mb-5 pb-5 border-b border-slate-100">
+                  <h3 className="text-2xl font-bold text-slate-900 leading-tight">{currentModelObj?.name}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md">{currentModelObj?.dimensions} ס"מ</span>
+                    <span className="text-xs font-bold text-slate-500 border border-slate-200 px-2 py-0.5 rounded-md">{currentEquipmentObj?.name}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6 mb-5 pb-5 border-b border-slate-100">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase mb-1.5">גוון אקריל</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full border shadow-sm" style={{ backgroundColor: currentAcrylicObj?.hex, borderColor: currentAcrylicObj?.border }}></div>
+                      <span className="text-xs font-bold text-slate-700">{currentAcrylicObj?.name}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase mb-1.5">גוון חיפוי</span>
+                    <div className="flex items-center gap-2">
+                      {currentCabinetObj?.hex === 'transparent' ? (
+                        <div className="w-6 h-6 rounded-full border border-slate-300 bg-slate-100 shadow-sm relative overflow-hidden"><div className="absolute inset-0 m-auto w-full h-[1.5px] bg-red-400 -rotate-45"></div></div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full border border-slate-300 shadow-sm" style={{ backgroundColor: currentCabinetObj?.hex }}></div>
+                      )}
+                      <span className="text-xs font-bold text-slate-700">{currentCabinetObj?.name.split(' - ')[0]}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6 flex-1">
+                  <span className="block text-[10px] text-slate-400 font-bold uppercase mb-2">תוספות נבחרות ({selectedAccessories.length})</span>
+                  {selectedAccessories.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">לא נבחרו תוספות. הוסף מהקטלוג.</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {selectedAccessories.map(id => {
+                        const acc = SALES_ACCESSORIES.find(a => a.id === id);
+                        return (
+                          <li key={id} className="text-xs font-semibold text-slate-700 flex items-start gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                            <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                            <span className="leading-tight">{acc?.label}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="space-y-3 mt-auto pt-4">
+                  <button type="button" onClick={goToProduction} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-600/20 transition cursor-pointer">
+                    המשך לתכנון הנדסי ושרטוט <ArrowLeft size={18} />
+                  </button>
+                  <button type="button" onClick={() => handleSaveOrder('draft')} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 font-bold text-sm transition cursor-pointer">
+                    <Save size={16} /> שמור הצעת מחיר כטיוטה
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </main>
+      )}
+
+      {activeTab === 'production' && (
+        <div className="flex flex-1 w-full overflow-hidden">
+          <aside className="w-80 border-l border-slate-200 bg-white p-5 flex flex-col justify-between shadow-sm overflow-y-auto shrink-0">
+            <div className="space-y-4">
+
+              <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-200">
+                <label className="block text-xs font-bold text-blue-900 mb-1.5 flex items-center gap-1.5"><Hash size={15} className="text-blue-600" /> הקצאת מספר ספא (חובה)</label>
+                <div className="flex items-center gap-2 bg-white border border-blue-300 rounded-xl p-2 focus-within:border-blue-600">
+                  <span className="text-xs font-bold text-slate-700 select-none">ספא מס׳</span>
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="____" value={serialDigits} onChange={handleSerialChange} className="w-24 bg-transparent text-lg font-mono font-bold tracking-[0.2em] text-blue-700 outline-none text-center" />
+                </div>
+              </div>
+
+              {salesNotes && (
+                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
+                  <label className="block text-xs font-bold text-blue-900 mb-1 flex items-center gap-1.5"><Info size={14} className="text-blue-600"/> הערות איש מכירות:</label>
+                  <p className="text-xs text-blue-800 whitespace-pre-wrap leading-relaxed">{salesNotes}</p>
+                </div>
+              )}
+
+              <button type="button" onClick={resetToStandardPreset} className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold transition cursor-pointer">
+                <RotateCcw size={14} className="text-blue-600" /> רענן טעינת תבנית יצרן
+              </button>
+
+              {isSelectedPanel && (
+                <button onClick={() => selectedItemId && rotatePlacedItem(selectedItemId)} className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold hover:bg-blue-100 transition cursor-pointer">
+                  <RotateCw size={14} /> סובב אלמנט נבחר ב-90°
+                </button>
+              )}
+
+              <div>
+                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex justify-between"><span>הוסף למשטח</span><span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">קנה מידה 1:1</span></h2>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {JETS_TOOLS.map((t) => (
+                    <button key={t.type} onClick={() => addJetToCanvas(t)} className="w-full flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 transition text-right group cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        {t.shape === 'rect' ? (
+                           <span className="w-4 h-1.5 rounded-sm shadow-sm border border-slate-300 shrink-0" style={{ backgroundColor: t.color }}></span>
+                        ) : (
+                           <span className="w-3 h-3 rounded-full shadow-sm border border-slate-300 shrink-0" style={{ backgroundColor: t.color }}></span>
+                        )}
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-blue-700">{t.label}</span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-1 py-0.5 rounded shrink-0">
+                        {t.widthMm ? `${t.widthMm}x${t.heightMm}` : `Ø${t.diameterMm}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-slate-100 mt-4">
+              <button onClick={() => handleSaveOrder('draft')} className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs transition cursor-pointer"><Save size={14} /> שמור כטיוטה להמשך</button>
+              <button onClick={() => setActiveTab('warehouse')} className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition cursor-pointer"><ClipboardList size={16} /> המשך לשלב 3: רשימת ליקוט</button>
+              <button onClick={() => setActiveTab('sales')} className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-medium transition cursor-pointer"><ArrowRight size={14} /> חזור לשלב המכירתי</button>
+            </div>
+          </aside>
+
+          <main className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between bg-white px-5 py-2.5 rounded-xl border border-slate-300 shadow-sm mb-3 w-[580px]">
+              <div className="flex items-center gap-2.5"><span className="font-mono font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 text-xs">{fullSpaTitle}</span><span className="font-bold text-slate-800 text-xs">{currentModelObj?.name}</span></div>
+              <div className="text-xs text-slate-500 font-medium">סה״כ נקודות שהוצבו: <span className="font-mono font-bold text-blue-600">{placedItems.length}</span></div>
+            </div>
+
+            <div className="relative rounded-2xl border border-slate-300 bg-white shadow-xl p-2">
+              <svg ref={svgRef} viewBox="0 0 640 640" className="w-[580px] h-[580px] select-none touch-none rounded-xl bg-white" onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onClick={() => setSelectedItemId(null)}>
+                <defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+                <image href={modelImageSrc} x="0" y="0" width="640" height="640" preserveAspectRatio="xMidYMid meet" />
+
+                {placedItems.map((item) => {
+                  const isSelected = selectedItemId === item.id;
+                  const isNonCircle = item.shape === 'oval' || item.shape === 'rect';
+                  const w = isNonCircle ? (item.widthMm || 165) * scalePxPerMmOrder : (item.diameterMm * scalePxPerMmOrder);
+                  const h = isNonCircle ? (item.heightMm || 57) * scalePxPerMmOrder : (item.diameterMm * scalePxPerMmOrder);
+                  const visualRadius = Math.max(w, h) / 2;
+                  const touchRadius = Math.max(visualRadius, 14);
+
+                  return (
+                    <g key={item.id} transform={`translate(${item.x}, ${item.y}) rotate(${item.rotation || 0})`} className="cursor-move" onPointerDown={(e) => handlePointerDown(item, e)} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setPlacedItems(prev => prev.filter(it => it.id !== item.id)); }} onDoubleClick={(e) => { e.stopPropagation(); setPlacedItems(prev => prev.filter(it => it.id !== item.id)); }}>
+                      <circle r={touchRadius} fill="transparent" />
+
+                      {isSelected && (
+                        isNonCircle ? <rect x={-w / 2 - 4} y={-h / 2 - 4} width={w + 8} height={h + 8} rx="6" fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="3,3" /> : <circle r={visualRadius + 4} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="3,3" />
+                      )}
+
+                      {renderItemGraphic(item, scalePxPerMmOrder)}
+
+                      {isSelected && (
+                        <g>
+                          <rect x="-45" y={h / 2 + 6} width="90" height="22" rx="4" fill="rgba(15, 23, 42, 0.9)" />
+                          <text x="0" y={h / 2 + 16} textAnchor="middle" fill="#ffffff" fontSize={8} fontWeight="bold" fontFamily="sans-serif">{item.label}</text>
+                          <text x="0" y={h / 2 + 24} textAnchor="middle" fill="#38bdf8" fontSize={7} fontFamily="monospace" fontWeight="bold">
+                            {isNonCircle ? `${item.widthMm}x${item.heightMm}mm` : `Ø${item.diameterMm}mm`}
+                          </text>
+
+                          <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setPlacedItems(prev => prev.filter(it => it.id !== item.id)); }} onPointerDown={(e) => e.stopPropagation()}>
+                            <circle cx={w / 2 + 8} cy={-h / 2 - 8} r="8" fill="#ef4444" stroke="#ffffff" strokeWidth="1.5" />
+                            <line x1={w / 2 + 5} y1={-h / 2 - 11} x2={w / 2 + 11} y2={-h / 2 - 5} stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+                            <line x1={w / 2 + 11} y1={-h / 2 - 11} x2={w / 2 + 5} y2={-h / 2 - 5} stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+                          </g>
+
+                          {isNonCircle && (
+                            <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); rotatePlacedItem(item.id); }} onPointerDown={(e) => e.stopPropagation()}>
+                              <circle cx={-w / 2 - 8} cy={-h / 2 - 8} r="8" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.5" />
+                              <path d={`M ${-w / 2 - 11} ${-h / 2 - 8} A 3 3 0 1 1 ${-w / 2 - 6} ${-h / 2 - 6}`} fill="none" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+                            </g>
+                          )}
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </main>
+        </div>
+      )}
+
+      {activeTab === 'warehouse' && (
+        <main className="max-w-4xl mx-auto p-6 md:p-8 w-full print:p-0">
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:m-0">
+
+            <div className="flex justify-between items-end border-b-2 border-slate-800 pb-4 mb-6">
+              <div>
+                <span className="text-blue-600 font-bold tracking-wider uppercase text-xs mb-1 block">Bill Of Materials (BOM)</span>
+                <h2 className="text-3xl font-black text-slate-900">רשימת ליקוט רכיבים למחסן</h2>
+                <p className="text-slate-500 mt-2 font-medium">
+                  הזמנה / ספא מס': <span className="font-mono text-lg text-slate-800 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">{serialDigits || 'טרם הוקצה'}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-3 print:hidden">
+                <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition shadow-md">
+                  <Printer size={18} /> הדפס טופס ליקוט
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
+              <div className="space-y-3">
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">דגם:</span><span className="font-bold text-slate-800">{currentModelObj?.name}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">רמת איבזור:</span><span className="font-bold text-slate-800">{currentEquipmentObj?.name}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">סוג התקנה:</span><span className="font-bold text-slate-800">{INSTALLATION_TYPES.find(i => i.id === installationType)?.label}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">צבע קליפה (אקריל):</span><span className="font-bold text-slate-800">{currentAcrylicObj?.name}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">חיפוי חיצוני:</span><span className="font-bold text-slate-800">{currentCabinetObj?.name.split('-')[0]}</span></div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">חיבור חשמל:</span><span className="font-bold text-slate-800">{selectedPhase === 'three' ? 'תלת פאזי' : 'חד פאזי'}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2">
+                  <span className="text-slate-500">כמות פסי תאורה להצבה:</span>
+                  <span className="font-bold text-slate-800">
+                    {lightedSidesCount > 0 ? `${lightedSidesCount} פסים` : 'ללא'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {salesNotes && (
+              <div className="mb-8 p-5 bg-blue-50 border border-blue-200 rounded-2xl">
+                <h3 className="font-black text-lg text-blue-900 mb-2 flex items-center gap-2"><MessageSquare size={20} /> הערות ודגשים מהזמנת הלקוח</h3>
+                <p className="text-blue-800 whitespace-pre-wrap leading-relaxed">{salesNotes}</p>
+              </div>
+            )}
+
+            <div className="mb-8">
+              <h3 className="font-black text-lg text-slate-800 mb-3 bg-slate-100 p-2 rounded-lg">מערכות מים, תאורה ופיקוד (מהשרטוט)</h3>
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-slate-200 text-slate-500 text-sm">
+                    <th className="py-2 px-2 w-10">#</th>
+                    <th className="py-2 px-2">תיאור פריט</th>
+                    <th className="py-2 px-2 w-24 text-center">כמות</th>
+                    <th className="py-2 px-2 w-20 text-center">לוקט ✔</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(groupedParts).map(([label, data], idx) => (
+                    <tr key={label} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-2 text-center text-slate-400 text-xs font-mono">{idx + 1}</td>
+                      <td className="py-3 px-2 font-semibold text-slate-800 flex items-center gap-2">
+                        {data.color === '#f59e0b' ? (
+                          <span className="w-4 h-1.5 rounded-sm border border-slate-300 shadow-sm inline-block" style={{ backgroundColor: data.color }}></span>
+                        ) : (
+                          <span className="w-3.5 h-3.5 rounded-full border border-slate-300 shadow-sm inline-block" style={{ backgroundColor: data.color }}></span>
+                        )}
+                        {label}
+                      </td>
+                      <td className="py-3 px-2 font-mono font-black text-blue-700 text-lg text-center">{data.count}</td>
+                      <td className="py-3 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td>
+                    </tr>
+                  ))}
+                  {Object.keys(groupedParts).length === 0 && (
+                    <tr><td colSpan={4} className="text-center py-6 text-slate-400 italic">לא הוצבו רכיבים בשרטוט</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {selectedAccessories.length > 0 && (
+              <div className="mb-8">
+                <h3 className="font-black text-lg text-slate-800 mb-3 bg-slate-100 p-2 rounded-lg">תוספות ושדרוגים (אביזרים נלווים)</h3>
+                <table className="w-full text-right border-collapse">
+                  <thead>
+                    <tr className="border-b-2 border-slate-200 text-slate-500 text-sm">
+                      <th className="py-2 px-2 w-10">#</th>
+                      <th className="py-2 px-2">תיאור פריט</th>
+                      <th className="py-2 px-2 w-20 text-center">לוקט ✔</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedAccessories.map((accId, idx) => {
+                      const acc = SALES_ACCESSORIES.find(a => a.id === accId);
+                      return (
+                        <tr key={accId} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-3 px-2 text-center text-slate-400 text-xs font-mono">{idx + 1}</td>
+                          <td className="py-3 px-2 font-semibold text-slate-800">{acc?.label}</td>
+                          <td className="py-3 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="print:hidden border-t border-slate-200 pt-6 flex flex-col sm:flex-row justify-between gap-4 mt-12">
+              <button onClick={() => setActiveTab('production')} className="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition">
+                חזור לשלב 2: תכנון
+              </button>
+              <button onClick={() => handleSaveOrder('final')} className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition cursor-pointer">
+                <CheckCircle2 size={20} /> סגור ושמור פקודת ייצור סופית למפעל
+              </button>
+            </div>
+
+          </div>
+        </main>
+      )}
+
+      {activeTab === 'archive' && (
+        <main className="flex-1 p-8 max-w-6xl mx-auto w-full">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">ארכיון פקודות עבודה וטיוטות</h2>
+              <p className="text-sm text-slate-500 mt-1">נהל את כל הזמנות המפעל, חזור לטיוטות פתוחות או פתח פקודה חדשה.</p>
+            </div>
+            <button onClick={resetToNewOrder} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-3 rounded-2xl font-bold hover:bg-blue-700 shadow-md transition cursor-pointer">
+              <PlusCircle size={18} /> פתח הזמנה חדשה
+            </button>
+          </div>
+          {orders.length === 0 ? (
+            <div className="text-center py-24 bg-white rounded-3xl border border-slate-200 border-dashed">
+              <Archive size={48} className="mx-auto text-slate-300 mb-4" />
+              <h3 className="text-lg font-bold text-slate-700">הארכיון ריק</h3>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {orders.sort((a, b) => b.updatedAt - a.updatedAt).map((order) => {
+                const isDraft = order.status === 'draft';
+                const model = MODELS.find(m => m.id === order.selectedModelId);
+                const date = new Date(order.updatedAt).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                return (
+                  <div key={order.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <div><span className="font-mono font-bold text-lg text-slate-900">{order.serialDigits ? `ספא מס׳ ${order.serialDigits}` : 'טיוטה מכירתית'}</span><div className="text-xs font-bold text-blue-600">{model?.name}</div></div>
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${isDraft ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}`}>{isDraft ? 'טיוטה פתוחה' : 'פקודה סגורה'}</span>
+                      </div>
+                      <div className="space-y-1.5 text-xs text-slate-600 my-4 border-t border-b border-slate-100 py-3">
+                        <div className="flex items-center gap-1.5"><Clock size={14} className="text-slate-400" /> <span dir="ltr">{date}</span></div>
+                        <div className="flex items-center gap-1.5"><Zap size={14} className="text-slate-400" /> {order.selectedPhase === 'three' ? 'תלת פאזי' : 'חד פאזי'}</div>
+                        <div className="flex items-center gap-1.5"><Layers size={14} className="text-slate-400" /> קידוחים במערכת: {order.placedItems.length}</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button onClick={() => loadOrder(order)} className="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer">{isDraft ? 'המשך עריכה' : 'צפה בטופס'}</button>
+                      <button onClick={() => deleteOrder(order.id)} className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </main>
+      )}
+
+      {activeTab === 'presets' && (
+        <div className="flex flex-1 w-full overflow-hidden bg-slate-100">
+          <aside className="w-80 border-l border-slate-300 bg-white p-5 flex flex-col shadow-xl z-10 overflow-y-auto shrink-0">
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
+                <Settings className="text-slate-600" />
+                עורך תבניות יצרן
+              </h2>
+              <p className="text-xs text-slate-500 leading-tight">בחר דגם, ערוך את הג'טים והיניקות ושמור תבנית למפעל.</p>
+            </div>
+
+            <div className="space-y-4 flex-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">בחר דגם:</label>
+                <select
+                  value={presetModelId}
+                  onChange={(e) => {
+                    const m = MODELS.find(x => x.id === e.target.value);
+                    setPresetModelId(e.target.value);
+                    if (m && m.equipments.length > 0) {
+                      setPresetEquipmentSku(m.equipments[0].sku);
+                      setPresetPlacedItems(getLayoutFor(e.target.value, m.equipments[0].sku, presets));
+                    }
+                  }}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm font-semibold focus:border-slate-800 outline-none"
+                >
+                  {MODELS.map(m => <option key={m.id} value={m.id}>{m.name} ({m.dimensions})</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">בחר רמת איבזור לדגם זה:</label>
+                <select
+                  value={presetEquipmentSku}
+                  onChange={(e) => {
+                    setPresetEquipmentSku(e.target.value);
+                    setPresetPlacedItems(getLayoutFor(presetModelId, e.target.value, presets));
+                  }}
+                  className="w-full p-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm focus:border-slate-800 outline-none"
+                >
+                  {presetModelObj?.equipments.map(eq => <option key={eq.sku} value={eq.sku}>{eq.name} ({eq.sku})</option>)}
+                </select>
+              </div>
+
+              {isPresetSelectedPanel && (
+                <button onClick={() => presetSelectedItemId && rotatePresetItem(presetSelectedItemId)} className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold hover:bg-blue-100 transition cursor-pointer">
+                  <RotateCw size={14} /> סובב אלמנט ב-90°
+                </button>
+              )}
+
+              <div className="bg-slate-800 h-px w-full my-4 opacity-10"></div>
+
+              <div>
+                <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2 flex justify-between">
+                  <span>ארגז כלים משרטוט</span>
+                  <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600">קנה מידה 1:1</span>
+                </h2>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {JETS_TOOLS.map((t) => (
+                    <button key={t.type} onClick={() => addJetToPreset(t)} className="w-full flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 transition text-right cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        {t.shape === 'rect' ? (
+                           <span className="w-4 h-1.5 rounded-sm shadow-sm border border-slate-300 shrink-0" style={{ backgroundColor: t.color }}></span>
+                        ) : (
+                           <span className="w-3 h-3 rounded-full shadow-sm border border-slate-300 shrink-0" style={{ backgroundColor: t.color }}></span>
+                        )}
+                        <span className="text-xs font-semibold text-slate-700">{t.label}</span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-slate-500">
+                        {t.widthMm ? `${t.widthMm}x${t.heightMm}` : `Ø${t.diameterMm}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-slate-200 mt-4 shrink-0">
+              <button onClick={clearPresetCanvas} className="w-full py-2 rounded-lg bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer">
+                נקה את כל המשטח
+              </button>
+              <button onClick={savePreset} className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm shadow-md transition cursor-pointer">
+                <Save size={16} /> שמור תבנית יצרן
+              </button>
+            </div>
+          </aside>
+
+          <main className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="flex items-center justify-between bg-white px-5 py-2.5 rounded-xl border border-slate-300 shadow-sm mb-3 w-[580px]">
+              <div className="flex items-center gap-2.5">
+                <span className="font-bold text-slate-800 text-sm">עריכת תבנית: {presetModelObj?.name}</span>
+                <span className="bg-slate-100 text-slate-600 text-xs font-mono px-2 py-0.5 rounded border border-slate-200">SKU: {presetEquipmentSku}</span>
+              </div>
+              <div className="text-xs text-slate-500 font-medium">סה״כ רכיבים: <span className="font-mono font-bold text-slate-800">{presetPlacedItems.length}</span></div>
+            </div>
+
+            <div className="relative rounded-2xl border-4 border-slate-300 bg-white shadow-2xl p-2 border-dashed">
+              <svg ref={presetSvgRef} viewBox="0 0 640 640" className="w-[580px] h-[580px] select-none touch-none rounded-xl" onPointerMove={handlePresetPointerMove} onPointerUp={handlePresetPointerUp} onClick={() => setPresetSelectedItemId(null)}>
+                <image href={presetModelImageSrc} x="0" y="0" width="640" height="640" preserveAspectRatio="xMidYMid meet" />
+
+                {presetPlacedItems.map((item) => {
+                  const isSelected = presetSelectedItemId === item.id;
+                  const isNonCircle = item.shape === 'oval' || item.shape === 'rect';
+                  const w = isNonCircle ? (item.widthMm || 165) * scalePxPerMmPreset : (item.diameterMm * scalePxPerMmPreset);
+                  const h = isNonCircle ? (item.heightMm || 57) * scalePxPerMmPreset : (item.diameterMm * scalePxPerMmPreset);
+                  const visualRadius = Math.max(w, h) / 2;
+                  const touchRadius = Math.max(visualRadius, 14);
+
+                  return (
+                    <g
+                      key={item.id}
+                      transform={`translate(${item.x}, ${item.y}) rotate(${item.rotation || 0})`}
+                      className="cursor-move"
+                      onPointerDown={(e) => handlePresetPointerDown(item, e)}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setPresetPlacedItems(prev => prev.filter(it => it.id !== item.id)); }}
+                      onDoubleClick={(e) => { e.stopPropagation(); setPresetPlacedItems(prev => prev.filter(it => it.id !== item.id)); }}
+                    >
+                      <circle r={touchRadius} fill="transparent" />
+
+                      {isSelected && (
+                        isNonCircle ? <rect x={-w / 2 - 4} y={-h / 2 - 4} width={w + 8} height={h + 8} rx="6" fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="3,3" /> : <circle r={visualRadius + 4} fill="none" stroke="#334155" strokeWidth="2" strokeDasharray="3,3" />
+                      )}
+
+                      {renderItemGraphic(item, scalePxPerMmPreset)}
+
+                      {isSelected && (
+                        <g>
+                          <rect x="-45" y={h / 2 + 6} width="90" height="22" rx="4" fill="rgba(15, 23, 42, 0.9)" />
+                          <text x="0" y={h / 2 + 16} textAnchor="middle" fill="#ffffff" fontSize={8} fontWeight="bold" fontFamily="sans-serif">{item.label}</text>
+                          <text x="0" y={h / 2 + 24} textAnchor="middle" fill="#cbd5e1" fontSize={7} fontFamily="monospace" fontWeight="bold">
+                            {isNonCircle ? `${item.widthMm}x${item.heightMm}mm` : `Ø${item.diameterMm}mm`}
+                          </text>
+
+                          <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setPresetPlacedItems(prev => prev.filter(it => it.id !== item.id)); }} onPointerDown={(e) => e.stopPropagation()}>
+                            <circle cx={w / 2 + 8} cy={-h / 2 - 8} r="8" fill="#ef4444" stroke="#ffffff" strokeWidth="1.5" />
+                            <line x1={w / 2 + 5} y1={-h / 2 - 11} x2={w / 2 + 11} y2={-h / 2 - 5} stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+                            <line x1={w / 2 + 11} y1={-h / 2 - 11} x2={w / 2 + 5} y2={-h / 2 - 5} stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+                          </g>
+
+                          {isNonCircle && (
+                            <g className="cursor-pointer" onClick={(e) => { e.stopPropagation(); rotatePresetItem(item.id); }} onPointerDown={(e) => e.stopPropagation()}>
+                              <circle cx={-w / 2 - 8} cy={-h / 2 - 8} r="8" fill="#3b82f6" stroke="#ffffff" strokeWidth="1.5" />
+                              <path d={`M ${-w / 2 - 11} ${-h / 2 - 8} A 3 3 0 1 1 ${-w / 2 - 6} ${-h / 2 - 6}`} fill="none" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
+                            </g>
+                          )}
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </main>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const container = document.getElementById("root");
+createRoot(container).render(<SpaProductionPage />);
+  </script>
+
+  <script>
+    const source = document.getElementById('app-source').textContent;
+    const output = Babel.transform(source, {
+      presets: [["typescript", { isTSX: true, allExtensions: true }], "react"],
+      filename: "app.tsx",
+      sourceType: "module"
+    }).code;
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.textContent = output;
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
