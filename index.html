@@ -806,7 +806,7 @@ function SpaProductionPage() {
                           <Search size={14} />
                         </button>
                       </div>
-                      <div className="flex-1 grid grid-cols-3 sm:grid-cols-4 gap-3 content-start">
+                      <div className="flex-1 grid grid-cols-3 sm:grid-cols-4 gap-3 content-center">
                         {CABINET_COLORS.filter(cab => cab.series === seriesKey).map((cab) => (
                           <div key={cab.id} className="text-center">
                             <button type="button" onClick={() => setSelectedCabinet(cab.id)} className="group/tile relative block w-full cursor-pointer">
