@@ -289,13 +289,13 @@ function SpaProductionPage() {
 
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [modelImageSrc, setModelImageSrc] = useState<string>(`models/${MODELS[1].id}.jpeg`);
+  const [modelImageSrc, setModelImageSrc] = useState<string>(`models/TOP-VIEW/${MODELS[1].id}.jpeg`);
 
   const [presetModelId, setPresetModelId] = useState(MODELS[1].id);
   const [presetEquipmentSku, setPresetEquipmentSku] = useState(MODELS[1].equipments[0].sku);
   const [presetPlacedItems, setPresetPlacedItems] = useState<PlacedItem[]>([]);
   const [presetSelectedItemId, setPresetSelectedItemId] = useState<string | null>(null);
-  const [presetModelImageSrc, setPresetModelImageSrc] = useState<string>(`models/${MODELS[1].id}.jpeg`);
+  const [presetModelImageSrc, setPresetModelImageSrc] = useState<string>(`models/TOP-VIEW/${MODELS[1].id}.jpeg`);
 
   const getLayoutFor = (mId: string, sku: string, currentPresets: Record<string, PlacedItem[]>): PlacedItem[] => {
     const key = getPresetKey(mId, sku);
@@ -331,8 +331,8 @@ function SpaProductionPage() {
     let found = false;
     testExtensions.forEach((ext) => {
       const testImg = new window.Image();
-      testImg.src = `models/${selectedModelId}.${ext}`;
-      testImg.onload = () => { if (!found) { found = true; setModelImageSrc(`/models/${selectedModelId}.${ext}`); } };
+      testImg.src = `models/TOP-VIEW/${selectedModelId}.${ext}`;
+      testImg.onload = () => { if (!found) { found = true; setModelImageSrc(`models/TOP-VIEW/${selectedModelId}.${ext}`); } };
     });
   }, [selectedModelId]);
 
@@ -341,8 +341,8 @@ function SpaProductionPage() {
     let found = false;
     testExtensions.forEach((ext) => {
       const testImg = new window.Image();
-      testImg.src = `models/${presetModelId}.${ext}`;
-      testImg.onload = () => { if (!found) { found = true; setPresetModelImageSrc(`/models/${presetModelId}.${ext}`); } };
+      testImg.src = `models/TOP-VIEW/${presetModelId}.${ext}`;
+      testImg.onload = () => { if (!found) { found = true; setPresetModelImageSrc(`models/TOP-VIEW/${presetModelId}.${ext}`); } };
     });
   }, [presetModelId]);
 
