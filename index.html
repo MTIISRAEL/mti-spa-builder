@@ -541,7 +541,6 @@ function SpaProductionPage() {
   const currentEquipmentObj = currentModelObj?.equipments.find(eq => eq.sku === selectedEquipmentSku) || currentModelObj?.equipments[0];
   const currentAcrylicObj = ACRYLIC_COLORS.find(a => a.code === selectedAcrylicCode);
   const currentCabinetObj = CABINET_COLORS.find(c => c.id === selectedCabinet);
-  const cabinetHeroImage = currentCabinetObj?.series ? CABINET_HERO_IMAGES[currentCabinetObj.series] : null;
   const fullSpaTitle = serialDigits ? `ספא מס' ${serialDigits}` : 'טרם הוקצה מספר ספא';
   const availableAcrylics = currentModelObj?.isSwimSpa ? ACRYLIC_COLORS.filter(c => c.code === 'MB-6427') : ACRYLIC_COLORS;
 
@@ -791,17 +790,15 @@ function SpaProductionPage() {
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
-              {cabinetHeroImage && (
-                <div className="mb-5 rounded-2xl overflow-hidden border border-slate-200 relative">
-                  <img src={cabinetHeroImage} alt="תצוגה של החיפוי המותקן" className="w-full h-48 object-cover" />
-                  <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[11px] font-bold px-2 py-1 rounded-lg">כך ייראה החיפוי בהתקנה בפועל</span>
-                </div>
-              )}
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {['classic', 'horizontal'].map((seriesKey) => (
                   <div key={seriesKey}>
                     <div className="bg-slate-100 px-4 py-2 rounded-xl mb-3">
                       <span className="text-sm font-bold text-slate-700">{CABINET_SERIES_LABELS[seriesKey]}</span>
+                    </div>
+                    <div className="mb-4 rounded-2xl overflow-hidden border border-slate-200 relative">
+                      <img src={CABINET_HERO_IMAGES[seriesKey]} alt={`תצוגה של ${CABINET_SERIES_LABELS[seriesKey]} בהתקנה`} className="w-full h-48 object-cover" />
+                      <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[11px] font-bold px-2 py-1 rounded-lg">כך ייראה החיפוי בהתקנה בפועל</span>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                       {CABINET_COLORS.filter(cab => cab.series === seriesKey).map((cab) => (
