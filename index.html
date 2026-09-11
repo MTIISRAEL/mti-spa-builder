@@ -208,6 +208,10 @@ const JETS_TOOLS = [
   { type: 'panel-st4', label: 'פאנל מגע Balboa ST4', widthMm: 146.0, heightMm: 102.0, diameterMm: 0, shape: 'rect', color: '#0f172a' },
 ];
 
+// לספא יש בדיוק פאנל פיקוד אחד, לכן בחירת פאנל מחליפה פאנל קיים במקום להוסיף עוד אחד
+const PANEL_TYPES = ['panel-tp500', 'panel-tp700', 'panel-st4'];
+const isPanelType = (type: string) => PANEL_TYPES.includes(type);
+
 const getModelMaxDimensionMm = (dimensionsStr: string) => {
   const nums = dimensionsStr.match(/\d+/g);
   if (!nums) return 2050;
@@ -379,7 +383,13 @@ function SpaProductionPage() {
       diameterMm: tool.diameterMm, widthMm: tool.widthMm, heightMm: tool.heightMm,
       shape: (tool.shape as 'circle' | 'oval' | 'rect') || 'circle', rotation: 0, color: tool.color
     };
-    setPlacedItems(prev => [...prev, newItem]);
+    setPlacedItems(prev => {
+      const existingPanel = isPanelType(tool.type) ? prev.find(it => isPanelType(it.type)) : null;
+      if (existingPanel) {
+        return prev.map(it => it.id === existingPanel.id ? { ...newItem, x: existingPanel.x, y: existingPanel.y, rotation: existingPanel.rotation || 0 } : it);
+      }
+      return [...prev, newItem];
+    });
     setSelectedItemId(newItem.id);
   };
 
@@ -411,7 +421,13 @@ function SpaProductionPage() {
       diameterMm: tool.diameterMm, widthMm: tool.widthMm, heightMm: tool.heightMm,
       shape: (tool.shape as 'circle' | 'oval' | 'rect') || 'circle', rotation: 0, color: tool.color
     };
-    setPresetPlacedItems(prev => [...prev, newItem]);
+    setPresetPlacedItems(prev => {
+      const existingPanel = isPanelType(tool.type) ? prev.find(it => isPanelType(it.type)) : null;
+      if (existingPanel) {
+        return prev.map(it => it.id === existingPanel.id ? { ...newItem, x: existingPanel.x, y: existingPanel.y, rotation: existingPanel.rotation || 0 } : it);
+      }
+      return [...prev, newItem];
+    });
     setPresetSelectedItemId(newItem.id);
   };
 
