@@ -312,13 +312,14 @@ const ROLES = {
   accounting: { label: 'הנהלת חשבונות', tabs: ['tracking', 'archive'], canEditOrder: false },
 };
 
-// 12 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
+// 13 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
 const STAGES = [
   { id: 'draft', label: 'טיוטה', site: 'אשדוד', roles: ['sales', 'planner'] },
   { id: 'approved', label: 'אושרה לייצור', site: 'אשדוד', roles: ['sales', 'planner'] },
   { id: 'kit-prep', label: 'קיט בהכנה', site: 'אשדוד', roles: ['warehouse'] },
   { id: 'kit-sent', label: 'קיט נשלח לברקן', site: 'אשדוד', roles: ['warehouse'] },
   { id: 'shell', label: 'קליפה בייצור / בייבוא', site: 'ברקן', roles: ['factory', 'warehouse'] },
+  { id: 'frame', label: 'גישטל', site: 'ברקן', roles: ['factory'] },
   { id: 'drill', label: 'קדיחה ושפשוף', site: 'ברקן', roles: ['factory'] },
   { id: 'cladding', label: 'חיפוי', site: 'ברקן', roles: ['factory'] },
   { id: 'equip', label: 'איבזור', site: 'אשדוד או ברקן', roles: ['factory', 'planner', 'warehouse'] },
