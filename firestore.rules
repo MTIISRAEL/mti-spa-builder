@@ -22,10 +22,18 @@ service cloud.firestore {
       allow write: if hasRole(['admin']);
     }
 
-    // הזמנות: כל משתמש מורשה רואה אותן. כתיבה רק למי שמנהל את ההזמנה, מחיקה רק למנהל.
+    // הזמנות: כל משתמש מורשה רואה אותן. פתיחה ועריכה מלאה רק לאשדוד,
+    // ומחסן/מפעל/הנהח״ש רשאים לקדם תחנה בלבד — לא לגעת בתוכן ההזמנה.
+    function onlyStageFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['stage', 'stageHistory', 'status', 'updatedAt', 'updatedBy']);
+    }
+
     match /orders/{orderId} {
       allow read: if hasRole(['admin', 'sales', 'planner', 'warehouse', 'factory', 'accounting']);
-      allow create, update: if hasRole(['admin', 'sales', 'planner']);
+      allow create: if hasRole(['admin', 'sales', 'planner']);
+      allow update: if hasRole(['admin', 'sales', 'planner'])
+                    || (hasRole(['warehouse', 'factory', 'accounting']) && onlyStageFields());
       allow delete: if hasRole(['admin']);
     }
 
