@@ -10,7 +10,10 @@
     "imports": {
       "react": "https://esm.sh/react@18.3.1",
       "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
-      "lucide-react": "https://esm.sh/lucide-react@0.475.0?deps=react@18.3.1&external=react"
+      "lucide-react": "https://esm.sh/lucide-react@0.475.0?deps=react@18.3.1&external=react",
+      "firebase/app": "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js",
+      "firebase/auth": "https://www.gstatic.com/firebasejs/11.3.1/firebase-auth.js",
+      "firebase/firestore": "https://www.gstatic.com/firebasejs/11.3.1/firebase-firestore.js"
     }
   }
   </script>
@@ -25,6 +28,10 @@
   <script type="text/plain" id="app-source">
 import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+import { firebaseConfig } from "./firebase-config.js";
 import {
   Sparkles,
   ArrowLeft,
@@ -109,6 +116,7 @@ interface OrderData {
   placedItems: PlacedItem[];
   status: 'draft' | 'final';
   updatedAt: number;
+  updatedBy?: string;
 }
 
 const RAW_MODELS: ModelItem[] = [
@@ -288,8 +296,53 @@ const POLARIS_URBAN_PRESET: PlacedItem[] = [
   { id: 'pu-mled-11', type: 'mini-led', label: 'מיני לד', diameterMm: 20.0, shape: 'circle', color: '#15803d', x: 60, y: 220 },
 ];
 
-function SpaProductionPage() {
-  const [activeTab, setActiveTab] = useState<'sales' | 'production' | 'warehouse' | 'archive' | 'presets'>('sales');
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+// התפקידים לפי האפיון. התפקיד נשמר במסמך users/<uid> ונקבע על ידי המנהל בלבד.
+const ROLES = {
+  admin: { label: 'מנהל', tabs: ['sales', 'production', 'warehouse', 'archive', 'presets'], canEditOrder: true },
+  sales: { label: 'איש מכירות', tabs: ['sales', 'production', 'warehouse', 'archive'], canEditOrder: true },
+  planner: { label: 'מתכנן איבזור', tabs: ['sales', 'production', 'warehouse', 'archive'], canEditOrder: true },
+  warehouse: { label: 'מחסנאי', tabs: ['warehouse', 'archive'], canEditOrder: false },
+  factory: { label: 'מפעל — ברקן', tabs: ['production', 'archive'], canEditOrder: false },
+  accounting: { label: 'הנהלת חשבונות', tabs: ['archive'], canEditOrder: false },
+};
+
+function LoginScreen({ onSignIn, error, busy }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
+      <form
+        onSubmit={(e) => { e.preventDefault(); onSignIn(email.trim(), password); }}
+        className="w-full max-w-sm bg-white rounded-3xl border border-slate-200 shadow-xl p-8"
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow"><Box size={22} /></div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">M.T.I — מערכת ייצור</h1>
+            <p className="text-xs text-slate-500">התחברות למערכת</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <input type="email" autoComplete="username" placeholder="אימייל" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
+          <input type="password" autoComplete="current-password" placeholder="סיסמה" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
+        </div>
+        {error && <p className="text-xs font-bold text-red-600 mt-3">{error}</p>}
+        <button type="submit" disabled={busy} className="w-full mt-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-sm shadow-md transition cursor-pointer">
+          {busy ? 'מתחבר…' : 'כניסה'}
+        </button>
+        <p className="text-[11px] text-slate-400 mt-4 text-center">אין הרשמה עצמית. משתמשים נוצרים על ידי המנהל.</p>
+      </form>
+    </div>
+  );
+}
+
+function SpaProductionPage({ currentUser, userRole, onSignOut }) {
+  const allowedTabs = ROLES[userRole]?.tabs || [];
+  const [activeTab, setActiveTab] = useState<'sales' | 'production' | 'warehouse' | 'archive' | 'presets'>(allowedTabs[0] || 'archive');
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [presets, setPresets] = useState<Record<string, PlacedItem[]>>({});
@@ -338,17 +391,23 @@ function SpaProductionPage() {
     return POLARIS_URBAN_PRESET.map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` }));
   };
 
+  // הזמנות ותבניות מגיעות מ‑Firestore ומתעדכנות חי אצל כל המשתמשים
   useEffect(() => {
-    const savedOrders = localStorage.getItem('mes_spa_orders');
-    if (savedOrders) {
-      try { setOrders(JSON.parse(savedOrders)); } catch (e) { console.error(e); }
-    }
-    let loadedPresets: Record<string, PlacedItem[]> = {};
-    const savedPresets = localStorage.getItem('mes_spa_presets');
-    if (savedPresets) {
-      try { loadedPresets = JSON.parse(savedPresets); setPresets(loadedPresets); } catch (e) { console.error(e); }
-    }
-    const initial = getLayoutFor(MODELS[1].id, MODELS[1].equipments[0].sku, loadedPresets);
+    const stopOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      setOrders(snap.docs.map(d => d.data() as OrderData));
+    }, (err) => console.error('orders', err));
+
+    const stopPresets = onSnapshot(collection(db, 'presets'), (snap) => {
+      const loaded: Record<string, PlacedItem[]> = {};
+      snap.docs.forEach(d => { loaded[d.id] = (d.data().items || []) as PlacedItem[]; });
+      setPresets(loaded);
+    }, (err) => console.error('presets', err));
+
+    return () => { stopOrders(); stopPresets(); };
+  }, []);
+
+  useEffect(() => {
+    const initial = getLayoutFor(MODELS[1].id, MODELS[1].equipments[0].sku, presets);
     setPlacedItems(initial);
     setPresetPlacedItems(initial);
   }, []);
@@ -475,16 +534,24 @@ function SpaProductionPage() {
   };
   const handlePresetPointerUp = () => setPresetDraggingId(null);
 
-  const savePreset = () => {
+  const savePreset = async () => {
     const key = getPresetKey(presetModelId, presetEquipmentSku);
-    const updatedPresets = { ...presets, [key]: presetPlacedItems };
-    setPresets(updatedPresets);
-    localStorage.setItem('mes_spa_presets', JSON.stringify(updatedPresets));
+    try {
+      await setDoc(doc(db, 'presets', key), {
+        items: presetPlacedItems,
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.email || '',
+      });
+    } catch (err) {
+      console.error(err);
+      alert('שמירת התבנית נכשלה. בדוק חיבור לאינטרנט והרשאות.');
+      return;
+    }
 
     if (selectedModelId === presetModelId && selectedEquipmentSku === presetEquipmentSku) {
       setPlacedItems(presetPlacedItems.map(item => ({ ...item, id: `item-${Date.now()}-${Math.random()}` })));
     }
-    alert('תבנית היצרן נשמרה בזיכרון וסונכרנה בהצלחה!');
+    alert('תבנית היצרן נשמרה וסונכרנה בהצלחה!');
   };
 
   const clearPresetCanvas = () => {
@@ -553,7 +620,7 @@ function SpaProductionPage() {
     setActiveTab('production');
   };
 
-  const handleSaveOrder = (status: 'draft' | 'final') => {
+  const handleSaveOrder = async (status: 'draft' | 'final') => {
     if (!customerName.trim() || !customerAddress.trim() || !customerPhone.trim()) {
       alert('יש למלא שם לקוח, כתובת וטלפון לפני שמירת ההזמנה!');
       return;
@@ -572,13 +639,17 @@ function SpaProductionPage() {
       serialDigits: serialDigits || '',
       selectedModelId, selectedEquipmentSku, selectedAcrylicCode, selectedCabinet, selectedPhase,
       installationType, shellSource, equipmentLocation, deliveryMethod,
-      selectedAccessories, lightedSidesCount, salesNotes, placedItems, status, updatedAt: Date.now()
+      selectedAccessories, lightedSidesCount, salesNotes, placedItems, status,
+      updatedAt: Date.now(), updatedBy: currentUser?.email || ''
     };
-    let updated = [...orders];
-    if (editingOrderId) updated = updated.map(o => o.id === editingOrderId ? orderToSave : o);
-    else { updated.push(orderToSave); setEditingOrderId(orderToSave.id); }
-    setOrders(updated);
-    localStorage.setItem('mes_spa_orders', JSON.stringify(updated));
+    try {
+      await setDoc(doc(db, 'orders', orderToSave.id), orderToSave);
+    } catch (err) {
+      console.error(err);
+      alert('שמירת ההזמנה נכשלה. בדוק חיבור לאינטרנט והרשאות.');
+      return;
+    }
+    if (!editingOrderId) setEditingOrderId(orderToSave.id);
     if (status === 'draft') alert('ההזמנה נשמרה כטיוטה בהצלחה!');
     else { alert(`פקודת עבודה לספא מס׳ ${serialDigits} נסגרה ואושרה לייצור בהצלחה!`); setActiveTab('archive'); }
   };
@@ -595,10 +666,14 @@ function SpaProductionPage() {
     setActiveTab('sales');
   };
 
-  const deleteOrder = (id: string) => {
+  const deleteOrder = async (id: string) => {
     if (confirm('האם למחוק הזמנה זו מהארכיון?')) {
-      const updated = orders.filter(o => o.id !== id);
-      setOrders(updated); localStorage.setItem('mes_spa_orders', JSON.stringify(updated));
+      try {
+        await deleteDoc(doc(db, 'orders', id));
+      } catch (err) {
+        console.error(err);
+        alert('מחיקת ההזמנה נכשלה. בדוק הרשאות.');
+      }
     }
   };
 
@@ -759,22 +834,44 @@ function SpaProductionPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
-          <button onClick={() => setActiveTab('sales')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'sales' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-            <ShoppingCart size={16} /> <span className="hidden md:inline">1.</span> מכירתי
-          </button>
-          <button onClick={goToProduction} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'production' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-            <Compass size={16} /> <span className="hidden md:inline">2.</span> תכנון
-          </button>
-          <button onClick={() => setActiveTab('warehouse')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-            <ClipboardList size={16} /> <span className="hidden md:inline">3.</span> ליקוט למחסן
-          </button>
-          <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'archive' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-            <Archive size={16} /> <span className="hidden md:inline">4.</span> ארכיון ({orders.length})
-          </button>
-          <button onClick={() => setActiveTab('presets')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'presets' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-            <Settings size={16} /> <span className="hidden md:inline">5.</span> תבניות
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 gap-1">
+            {allowedTabs.includes('sales') && (
+              <button onClick={() => setActiveTab('sales')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'sales' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <ShoppingCart size={16} /> <span className="hidden md:inline">1.</span> מכירתי
+              </button>
+            )}
+            {allowedTabs.includes('production') && (
+              <button onClick={goToProduction} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'production' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <Compass size={16} /> <span className="hidden md:inline">2.</span> תכנון
+              </button>
+            )}
+            {allowedTabs.includes('warehouse') && (
+              <button onClick={() => setActiveTab('warehouse')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <ClipboardList size={16} /> <span className="hidden md:inline">3.</span> ליקוט למחסן
+              </button>
+            )}
+            {allowedTabs.includes('archive') && (
+              <button onClick={() => setActiveTab('archive')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'archive' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <Archive size={16} /> <span className="hidden md:inline">4.</span> ארכיון ({orders.length})
+              </button>
+            )}
+            {allowedTabs.includes('presets') && (
+              <button onClick={() => setActiveTab('presets')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'presets' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <Settings size={16} /> <span className="hidden md:inline">5.</span> תבניות
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 text-right">
+            <div className="hidden sm:block">
+              <div className="text-xs font-bold text-slate-800 leading-tight">{currentUser?.email}</div>
+              <div className="text-[11px] text-slate-500">{ROLES[userRole]?.label}</div>
+            </div>
+            <button onClick={onSignOut} title="התנתק" className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer">
+              <X size={16} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1591,8 +1688,67 @@ function SpaProductionPage() {
   );
 }
 
+function App() {
+  const [authState, setAuthState] = useState<'loading' | 'out' | 'in'>('loading');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string>('');
+  const [loginError, setLoginError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) { setCurrentUser(null); setUserRole(''); setAuthState('out'); return; }
+      let role = '';
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        role = snap.exists() ? (snap.data().role || '') : '';
+      } catch (err) {
+        console.error('role lookup', err);
+      }
+      setCurrentUser(user);
+      setUserRole(role);
+      setAuthState('in');
+    });
+  }, []);
+
+  const handleSignIn = async (email: string, password: string) => {
+    setBusy(true); setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: any) {
+      const code = err?.code || '';
+      setLoginError(
+        code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')
+          ? 'אימייל או סיסמה שגויים.'
+          : 'ההתחברות נכשלה. בדוק חיבור לאינטרנט ונסה שוב.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (authState === 'loading') {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-500" dir="rtl">טוען…</div>;
+  }
+  if (authState === 'out') {
+    return <LoginScreen onSignIn={handleSignIn} error={loginError} busy={busy} />;
+  }
+  if (!ROLES[userRole]) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" dir="rtl">
+        <div className="max-w-sm bg-white rounded-3xl border border-slate-200 shadow-xl p-8 text-center">
+          <h1 className="text-lg font-bold text-slate-900 mb-2">אין לך הרשאה למערכת</h1>
+          <p className="text-sm text-slate-500 mb-5">המשתמש {currentUser?.email} מחובר, אבל לא הוגדר לו תפקיד. פנה למנהל.</p>
+          <button onClick={() => signOut(auth)} className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition cursor-pointer">התנתק</button>
+        </div>
+      </div>
+    );
+  }
+  return <SpaProductionPage currentUser={currentUser} userRole={userRole} onSignOut={() => signOut(auth)} />;
+}
+
 const container = document.getElementById("root");
-createRoot(container).render(<SpaProductionPage />);
+createRoot(container).render(<App />);
   </script>
 
   <script>
