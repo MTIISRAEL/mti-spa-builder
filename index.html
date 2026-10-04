@@ -100,6 +100,9 @@ interface OrderData {
   selectedCabinet: string;
   selectedPhase: 'single' | 'three';
   installationType: 'above-ground' | 'semi-inground' | 'fully-inground';
+  shellSource: '' | 'barkan' | 'import';
+  equipmentLocation: '' | 'ashdod' | 'barkan';
+  deliveryMethod: '' | 'pickup' | 'installation';
   selectedAccessories: string[];
   lightedSidesCount: number;
   salesNotes: string;
@@ -176,6 +179,22 @@ const INSTALLATION_TYPES = [
   { id: 'above-ground', label: 'התקנה עילית', desc: 'מונח על ריצוף / משטח' },
   { id: 'semi-inground', label: 'חצי שקועה', desc: 'שקוע בעומק 30-50 ס"מ' },
   { id: 'fully-inground', label: 'שקועה לגמרי', desc: 'בתוך בור קו אפס' },
+];
+
+// שלוש החלטות שאשדוד מקבל בשלב המכירה, וכל אתר עובד לפיהן
+const SHELL_SOURCES = [
+  { id: 'barkan', label: 'ייצור בברקן', desc: 'הקליפה מיוצרת במפעל' },
+  { id: 'import', label: 'ייבוא מסין', desc: 'נשלחת מאשדוד לברקן' },
+];
+
+const EQUIPMENT_LOCATIONS = [
+  { id: 'ashdod', label: 'אשדוד', desc: 'הקיט נשאר אצלנו' },
+  { id: 'barkan', label: 'ברקן', desc: 'הקיט נשלח למפעל' },
+];
+
+const DELIVERY_METHODS = [
+  { id: 'pickup', label: 'איסוף עצמי', desc: 'אריזה לאיסוף' },
+  { id: 'installation', label: 'התקנה', desc: 'אריזה להובלה' },
 ];
 
 const SALES_ACCESSORIES = [
@@ -287,6 +306,9 @@ function SpaProductionPage() {
   const [selectedCabinet, setSelectedCabinet] = useState(CABINET_COLORS[0].id);
   const [selectedPhase, setSelectedPhase] = useState<'single' | 'three'>('three');
   const [installationType, setInstallationType] = useState<'above-ground' | 'semi-inground' | 'fully-inground'>('above-ground');
+  const [shellSource, setShellSource] = useState<'' | 'barkan' | 'import'>('');
+  const [equipmentLocation, setEquipmentLocation] = useState<'' | 'ashdod' | 'barkan'>('');
+  const [deliveryMethod, setDeliveryMethod] = useState<'' | 'pickup' | 'installation'>('');
   const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
   const [lightedSidesCount, setLightedSidesCount] = useState<number>(0);
   const [salesNotes, setSalesNotes] = useState<string>('');
@@ -517,6 +539,9 @@ function SpaProductionPage() {
     setSelectedCabinet(CABINET_COLORS[0].id);
     setSelectedPhase('three');
     setInstallationType('above-ground');
+    setShellSource('');
+    setEquipmentLocation('');
+    setDeliveryMethod('');
     setSelectedAccessories([]);
     setLightedSidesCount(0);
     setSalesNotes('');
@@ -534,7 +559,11 @@ function SpaProductionPage() {
       return;
     }
     if (status === 'final' && serialDigits.length !== 4) {
-      alert('חובה להקצות מספר ספא תקין (4 ספרות) על ידי האיש הטכני לפני סגירת הפקודה לייצור!');
+      alert('חובה להקצות מספר ספא תקין (4 ספרות) לפני סגירת הפקודה לייצור!');
+      return;
+    }
+    if (status === 'final' && (!shellSource || !equipmentLocation || !deliveryMethod)) {
+      alert('חובה לבחור מקור קליפה, מקום איבזור ואופן מסירה לפני סגירת הפקודה לייצור!');
       return;
     }
     const orderToSave: OrderData = {
@@ -542,7 +571,8 @@ function SpaProductionPage() {
       customerName: customerName.trim(), customerAddress: customerAddress.trim(), customerPhone: customerPhone.trim(),
       serialDigits: serialDigits || '',
       selectedModelId, selectedEquipmentSku, selectedAcrylicCode, selectedCabinet, selectedPhase,
-      installationType, selectedAccessories, lightedSidesCount, salesNotes, placedItems, status, updatedAt: Date.now()
+      installationType, shellSource, equipmentLocation, deliveryMethod,
+      selectedAccessories, lightedSidesCount, salesNotes, placedItems, status, updatedAt: Date.now()
     };
     let updated = [...orders];
     if (editingOrderId) updated = updated.map(o => o.id === editingOrderId ? orderToSave : o);
@@ -558,6 +588,7 @@ function SpaProductionPage() {
     setCustomerName(order.customerName || ''); setCustomerAddress(order.customerAddress || ''); setCustomerPhone(order.customerPhone || '');
     setSerialDigits(order.serialDigits); setSelectedModelId(order.selectedModelId); setSelectedEquipmentSku(order.selectedEquipmentSku); setSelectedAcrylicCode(order.selectedAcrylicCode); setSelectedCabinet(order.selectedCabinet); setSelectedPhase(order.selectedPhase);
     setInstallationType(order.installationType || 'above-ground');
+    setShellSource(order.shellSource || ''); setEquipmentLocation(order.equipmentLocation || ''); setDeliveryMethod(order.deliveryMethod || '');
     setSelectedAccessories(order.selectedAccessories); setLightedSidesCount(order.lightedSidesCount || 0);
     setSalesNotes(order.salesNotes || '');
     setPlacedItems(order.placedItems.length > 0 ? order.placedItems : getLayoutFor(order.selectedModelId, order.selectedEquipmentSku, presets));
@@ -759,8 +790,8 @@ function SpaProductionPage() {
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-              <label className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><User className="text-blue-600" size={20} /> פרטי לקוח</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><User className="text-blue-600" size={20} /> פרטי לקוח ומספר ספא</label>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="relative">
                   <User size={16} className="absolute right-3 top-3 text-slate-400" />
                   <input type="text" placeholder="שם לקוח" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full pr-9 pl-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
@@ -772,6 +803,10 @@ function SpaProductionPage() {
                 <div className="relative">
                   <Phone size={16} className="absolute right-3 top-3 text-slate-400" />
                   <input type="tel" placeholder="טלפון" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="w-full pr-9 pl-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
+                </div>
+                <div className="relative">
+                  <Hash size={16} className="absolute right-3 top-3 text-blue-500" />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="מספר ספא (4 ספרות)" value={serialDigits} onChange={handleSerialChange} className="w-full pr-9 pl-3 py-2.5 border border-blue-200 rounded-xl text-sm bg-blue-50/50 font-mono tracking-[0.15em] text-blue-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
                 </div>
               </div>
             </div>
@@ -829,7 +864,33 @@ function SpaProductionPage() {
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-blue-600" size={20} /> 4. צבע קליפת אקריליק</label>
+              <div className="mb-4">
+                <label className="text-base font-bold text-slate-900 flex items-center gap-2"><Compass className="text-blue-600" size={20} /> 4. החלטות ייצור</label>
+                <p className="text-sm text-slate-500 mt-1">שלוש החלטות שנקבעות כאן באשדוד, ומופיעות במסמכים של שני האתרים.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {[
+                  { title: 'מקור הקליפה', options: SHELL_SOURCES, value: shellSource, set: setShellSource },
+                  { title: 'מקום האיבזור', options: EQUIPMENT_LOCATIONS, value: equipmentLocation, set: setEquipmentLocation },
+                  { title: 'אופן מסירה', options: DELIVERY_METHODS, value: deliveryMethod, set: setDeliveryMethod },
+                ].map((group) => (
+                  <div key={group.title}>
+                    <div className="text-xs font-bold text-slate-700 mb-2">{group.title}</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {group.options.map((opt) => (
+                        <button type="button" key={opt.id} onClick={() => group.set(opt.id as any)} className={`p-3 rounded-2xl border text-right transition cursor-pointer ${group.value === opt.id ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}>
+                          <div className={`text-sm font-bold ${group.value === opt.id ? 'text-blue-950' : 'text-slate-700'}`}>{opt.label}</div>
+                          <div className="text-[11px] text-slate-500 leading-tight">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-blue-600" size={20} /> 5. צבע קליפת אקריליק</label>
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                 {availableAcrylics.map((color) => (
                   <div key={color.code} className="text-center">
@@ -862,7 +923,7 @@ function SpaProductionPage() {
 
             {installationType === 'above-ground' && (
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 5. צבע חיפוי חיצוני</label>
+              <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Palette className="text-slate-600" size={20} /> 6. צבע חיפוי חיצוני</label>
               <div className="space-y-5">
                 {['classic', 'horizontal'].map((seriesKey) => (
                   <div key={seriesKey}>
@@ -920,7 +981,7 @@ function SpaProductionPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Lightbulb className="text-amber-500" size={20} /> 6. פסי תאורה לחיפוי</label>
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Lightbulb className="text-amber-500" size={20} /> 7. פסי תאורה לחיפוי</label>
                 <div className="flex items-center gap-4">
                   <select
                     value={lightedSidesCount}
@@ -934,7 +995,7 @@ function SpaProductionPage() {
                 </div>
               </div>
               <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Zap className="text-blue-600" size={20} /> 7. חיבור חשמל</label>
+                <label className="block text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><Zap className="text-blue-600" size={20} /> 8. חיבור חשמל</label>
                 <div className="grid grid-cols-2 gap-3">
                   <button type="button" onClick={() => setSelectedPhase('single')} className={`py-3 px-4 rounded-2xl border text-center transition text-sm font-bold cursor-pointer ${selectedPhase === 'single' ? 'border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
                     חד פאזי
@@ -948,7 +1009,7 @@ function SpaProductionPage() {
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <div className="mb-6">
-                <label className="text-lg font-bold text-slate-900 flex items-center gap-2"><Award className="text-amber-500" size={24} /> 8. תוספות שדרוג ויוקרה</label>
+                <label className="text-lg font-bold text-slate-900 flex items-center gap-2"><Award className="text-amber-500" size={24} /> 9. תוספות שדרוג ויוקרה</label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {SALES_ACCESSORIES.map((acc) => {
@@ -969,7 +1030,7 @@ function SpaProductionPage() {
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <div className="mb-4">
                 <label className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <MessageSquare className="text-blue-600" size={24} /> 9. הערות ורשמים מהשיחה עם הלקוח
+                  <MessageSquare className="text-blue-600" size={24} /> 10. הערות ורשמים מהשיחה עם הלקוח
                 </label>
                 <p className="text-sm text-slate-500 mt-1">רשום כאן כל פרט רלוונטי, בקשות מיוחדות, דגשים להתקנה או הערות לייצור שיעברו למחסנאי.</p>
               </div>
@@ -1074,11 +1135,14 @@ function SpaProductionPage() {
             <div className="space-y-4">
 
               <div className="bg-blue-50/60 p-4 rounded-2xl border-2 border-blue-200">
-                <label className="block text-xs font-bold text-blue-900 mb-1.5 flex items-center gap-1.5"><Hash size={15} className="text-blue-600" /> הקצאת מספר ספא (חובה)</label>
-                <div className="flex items-center gap-2 bg-white border border-blue-300 rounded-xl p-2 focus-within:border-blue-600">
-                  <span className="text-xs font-bold text-slate-700 select-none">ספא מס׳</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="____" value={serialDigits} onChange={handleSerialChange} className="w-24 bg-transparent text-lg font-mono font-bold tracking-[0.2em] text-blue-700 outline-none text-center" />
-                </div>
+                <label className="block text-xs font-bold text-blue-900 mb-1.5 flex items-center gap-1.5"><Hash size={15} className="text-blue-600" /> מספר ספא</label>
+                {serialDigits.length === 4 ? (
+                  <div className="bg-white border border-blue-300 rounded-xl p-2 text-lg font-mono font-bold tracking-[0.2em] text-blue-700 text-center">{serialDigits}</div>
+                ) : (
+                  <button type="button" onClick={() => setActiveTab('sales')} className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-bold text-amber-800 cursor-pointer hover:bg-amber-50 transition">
+                    טרם הוקצה — להקצאה בשלב המכירה
+                  </button>
+                )}
               </div>
 
               {salesNotes && (
@@ -1225,6 +1289,9 @@ function SpaProductionPage() {
                     {lightedSidesCount > 0 ? `${lightedSidesCount} פסים` : 'ללא'}
                   </span>
                 </div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">מקור הקליפה:</span><span className="font-bold text-slate-800">{SHELL_SOURCES.find(s => s.id === shellSource)?.label || 'טרם נקבע'}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">מקום האיבזור:</span><span className="font-bold text-slate-800">{EQUIPMENT_LOCATIONS.find(s => s.id === equipmentLocation)?.label || 'טרם נקבע'}</span></div>
+                <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">אופן מסירה:</span><span className="font-bold text-slate-800">{DELIVERY_METHODS.find(s => s.id === deliveryMethod)?.label || 'טרם נקבע'}</span></div>
               </div>
             </div>
 
