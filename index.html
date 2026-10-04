@@ -313,7 +313,7 @@ const ROLES = {
   accounting: { label: 'הנהלת חשבונות', tabs: ['tasks', 'tracking', 'archive'], canEditOrder: false },
 };
 
-// 13 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
+// 14 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
 const STAGES = [
   { id: 'draft', label: 'טיוטה', site: 'אשדוד', roles: ['sales', 'planner'] },
   { id: 'approved', label: 'אושרה לייצור', site: 'אשדוד', roles: ['sales', 'planner'] },
@@ -327,6 +327,7 @@ const STAGES = [
   { id: 'test', label: 'טסט, ניקיון ואריזה', site: 'אשדוד', roles: ['warehouse', 'planner'] },
   { id: 'ready', label: 'מוכן למשלוח', site: 'אשדוד', roles: ['warehouse', 'planner', 'sales'] },
   { id: 'payment', label: 'אישור תשלום', site: 'הנהלת חשבונות', roles: ['accounting'] },
+  { id: 'awaiting-delivery', label: 'ממתין למסירה', site: 'אשדוד', roles: ['sales'] },
   { id: 'delivered', label: 'נמסר ללקוח', site: 'אשדוד', roles: ['sales'] },
 ];
 
