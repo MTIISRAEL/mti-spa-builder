@@ -65,7 +65,8 @@ import {
   X,
   User,
   MapPin,
-  Phone
+  Phone,
+  ListChecks
 } from "lucide-react";
 
 interface EquipmentLevel {
@@ -116,7 +117,7 @@ interface OrderData {
   placedItems: PlacedItem[];
   status: 'draft' | 'final';
   stage?: string;
-  stageHistory?: { stage: string; at: number; by: string }[];
+  stageHistory?: { stage: string; at: number; by: string; note?: string }[];
   updatedAt: number;
   updatedBy?: string;
 }
@@ -304,12 +305,12 @@ const db = getFirestore(firebaseApp);
 
 // התפקידים לפי האפיון. התפקיד נשמר במסמך users/<uid> ונקבע על ידי המנהל בלבד.
 const ROLES = {
-  admin: { label: 'מנהל', tabs: ['sales', 'production', 'warehouse', 'tracking', 'archive', 'presets'], canEditOrder: true },
-  sales: { label: 'איש מכירות', tabs: ['sales', 'production', 'warehouse', 'tracking', 'archive'], canEditOrder: true },
-  planner: { label: 'מתכנן איבזור', tabs: ['sales', 'production', 'warehouse', 'tracking', 'archive'], canEditOrder: true },
-  warehouse: { label: 'מחסנאי', tabs: ['warehouse', 'tracking', 'archive'], canEditOrder: false },
-  factory: { label: 'מפעל — ברקן', tabs: ['tracking', 'production', 'archive'], canEditOrder: false },
-  accounting: { label: 'הנהלת חשבונות', tabs: ['tracking', 'archive'], canEditOrder: false },
+  admin: { label: 'מנהל', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive', 'presets'], canEditOrder: true },
+  sales: { label: 'איש מכירות', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
+  planner: { label: 'מתכנן איבזור', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
+  warehouse: { label: 'מחסנאי', tabs: ['tasks', 'warehouse', 'tracking', 'archive'], canEditOrder: false },
+  factory: { label: 'מפעל — ברקן', tabs: ['tasks', 'tracking', 'production', 'archive'], canEditOrder: false },
+  accounting: { label: 'הנהלת חשבונות', tabs: ['tasks', 'tracking', 'archive'], canEditOrder: false },
 };
 
 // 13 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
@@ -406,6 +407,9 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
   const [salesNotes, setSalesNotes] = useState<string>('');
   const [zoomImage, setZoomImage] = useState<string | null>(null);
   const [stageFilter, setStageFilter] = useState<string>('');
+  const [confirmOrderId, setConfirmOrderId] = useState<string | null>(null);
+  const [confirmNote, setConfirmNote] = useState('');
+  const [stageBusy, setStageBusy] = useState(false);
 
   const [placedItems, setPlacedItems] = useState<PlacedItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -718,22 +722,64 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
   const activeOrders = orders.filter(o => (o.stage || 'draft') !== 'delivered');
   const deliveredOrders = orders.filter(o => (o.stage || 'draft') === 'delivered');
 
-  const advanceStage = async (order: OrderData, toStage?: string) => {
-    const target = toStage || nextStageId(order);
+  // סיום תחנה נעשה רק ממסך "המשימות שלי", אחרי חלון אישור
+  const advanceStage = async (order: OrderData, note: string) => {
+    const target = nextStageId(order);
     if (!target) return;
-    const label = stageObj(target).label;
-    if (target === 'delivered' && !confirm(`לסמן שספא ${order.serialDigits || ''} נמסר ללקוח? ההזמנה תעבור לארכיון.`)) return;
+    const entry: any = { stage: target, at: Date.now(), by: currentUser?.email || '' };
+    if (note.trim()) entry.note = note.trim();
+    setStageBusy(true);
     try {
       await setDoc(doc(db, 'orders', order.id), {
         stage: target,
-        status: target === 'draft' ? 'draft' : 'final',
-        stageHistory: [...(order.stageHistory || []), { stage: target, at: Date.now(), by: currentUser?.email || '' }],
+        status: 'final',
+        stageHistory: [...(order.stageHistory || []), entry],
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.email || '',
+      }, { merge: true });
+      setConfirmOrderId(null);
+      setConfirmNote('');
+    } catch (err) {
+      console.error(err);
+      alert(`העדכון ל"${stageObj(target).label}" נכשל. ייתכן שאין לך הרשאה לעדכן מהתחנה הזאת.`);
+    } finally {
+      setStageBusy(false);
+    }
+  };
+
+  // רק מי שסימן את המעבר האחרון רשאי לבטל אותו, וכל עוד אף אחד לא קידם את הספא מאז
+  const canUndo = (order: OrderData) => (order.stageHistory || []).at(-1)?.by === currentUser?.email;
+
+  // טיוטה עוברת לאישור רק דרך סגירת הפקודה בלשונית המכירה, שם נבדקים השדות החובה
+  const myQueue = activeOrders.filter(o => stageObj(o.stage || 'draft').id !== 'draft' && nextStageId(o) && canAdvance(o, userRole));
+  const myDrafts = ROLES[userRole]?.canEditOrder ? activeOrders.filter(o => stageObj(o.stage || 'draft').id === 'draft') : [];
+  const myRecent = orders
+    .filter(canUndo)
+    .sort((a, b) => (b.stageHistory?.at(-1)?.at || 0) - (a.stageHistory?.at(-1)?.at || 0))
+    .slice(0, 10);
+  const confirmOrder = orders.find(o => o.id === confirmOrderId) || null;
+  // ברקן רואה מספר ספא בלבד, בלי פרטי לקוח
+  const showCustomer = userRole !== 'factory';
+
+  const undoStage = async (order: OrderData) => {
+    const history = order.stageHistory || [];
+    if (!canUndo(order)) return;
+    // היסטוריה חסרה (הזמנה ישנה) — חוזרים לתחנה הרלוונטית הקודמת ברשימה
+    const back = history.at(-2)?.stage
+      || [...STAGES.slice(0, stageIndex(order.stage || 'draft'))].reverse().find(s => isStageRelevant(s.id, order))?.id
+      || 'draft';
+    if (!confirm(`להחזיר את ספא ${order.serialDigits || ''} מ"${stageObj(order.stage || 'draft').label}" ל"${stageObj(back).label}"?`)) return;
+    try {
+      await setDoc(doc(db, 'orders', order.id), {
+        stage: back,
+        status: back === 'draft' ? 'draft' : 'final',
+        stageHistory: history.slice(0, -1),
         updatedAt: Date.now(),
         updatedBy: currentUser?.email || '',
       }, { merge: true });
     } catch (err) {
       console.error(err);
-      alert(`העדכון ל"${label}" נכשל. ייתכן שאין לך הרשאה לעדכן מהתחנה הזאת.`);
+      alert('הביטול נכשל. בדוק חיבור לאינטרנט והרשאות.');
     }
   };
 
@@ -899,6 +945,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
               {activeTab === 'sales' && 'שלב 1: מפרט הזמנה (תצוגה שיווקית)'}
               {activeTab === 'production' && `שלב 2: תכנון הנדסי ושרטוט - ${fullSpaTitle}`}
               {activeTab === 'warehouse' && 'שלב 3: רשימת ליקוט רכיבים למחסן'}
+              {activeTab === 'tasks' && 'המשימות שלי — ספא שמחכים לך'}
               {activeTab === 'tracking' && 'מעקב ייצור — איפה כל ספא עומד'}
               {activeTab === 'archive' && 'ארכיון — ספא שנמסרו ללקוח'}
               {activeTab === 'presets' && 'עורך תבניות יצרן - הגדרות ברירת מחדל'}
@@ -921,6 +968,11 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             {allowedTabs.includes('warehouse') && (
               <button onClick={() => setActiveTab('warehouse')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
                 <ClipboardList size={16} /> <span className="hidden md:inline">3.</span> ליקוט למחסן
+              </button>
+            )}
+            {allowedTabs.includes('tasks') && (
+              <button onClick={() => setActiveTab('tasks')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'tasks' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <ListChecks size={16} /> המשימות שלי ({myQueue.length})
               </button>
             )}
             {allowedTabs.includes('tracking') && (
@@ -1550,12 +1602,176 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
         </main>
       )}
 
+      {activeTab === 'tasks' && (
+        <main className="flex-1 p-6 md:p-8 max-w-6xl mx-auto w-full">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-slate-900">המשימות שלי</h2>
+            <p className="text-sm text-slate-500 mt-1">ספא שנמצאים בתחנה שבאחריותך. כשסיימת את העבודה על ספא, סמן "סיימתי" והוא יעבור לתחנה הבאה.</p>
+          </div>
+
+          {myQueue.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 border-dashed mb-8">
+              <CheckCircle2 size={44} className="mx-auto text-emerald-300 mb-3" />
+              <h3 className="text-lg font-bold text-slate-700">אין ספא שמחכה לך כרגע</h3>
+            </div>
+          ) : (
+            <div className="space-y-8 mb-10">
+              {STAGES.filter(s => myQueue.some(o => stageObj(o.stage || 'draft').id === s.id)).map((s) => (
+                <section key={s.id}>
+                  <div className="flex items-baseline gap-3 mb-3">
+                    <h3 className="text-base font-bold text-slate-900">{stageIndex(s.id) + 1}. {s.label}</h3>
+                    <span className="text-xs text-slate-500">{s.site}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {myQueue.filter(o => stageObj(o.stage || 'draft').id === s.id).map((order) => {
+                      const model = MODELS.find(m => m.id === order.selectedModelId);
+                      const lastEntry = (order.stageHistory || []).at(-1);
+                      const facts = [
+                        ['דגם', model?.name],
+                        ['אקריליק', ACRYLIC_COLORS.find(a => a.code === order.selectedAcrylicCode)?.name],
+                        ['התקנה', INSTALLATION_TYPES.find(t => t.id === order.installationType)?.label],
+                        ['חיפוי', order.installationType === 'above-ground' ? CABINET_COLORS.find(c => c.id === order.selectedCabinet)?.name : null],
+                        ['קליפה', SHELL_SOURCES.find(x => x.id === order.shellSource)?.label],
+                        ['איבזור', EQUIPMENT_LOCATIONS.find(x => x.id === order.equipmentLocation)?.label],
+                        ['מסירה', DELIVERY_METHODS.find(x => x.id === order.deliveryMethod)?.label],
+                      ].filter(([, v]) => v);
+                      return (
+                        <div key={order.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <div className="font-mono font-bold text-xl text-slate-900">ספא {order.serialDigits || '—'}</div>
+                              {showCustomer && <div className="text-xs text-slate-500">{order.customerName}</div>}
+                            </div>
+                            <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                              מ־{new Date(lastEntry?.at || order.updatedAt).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                          </div>
+                          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs mb-3">
+                            {facts.map(([k, v]) => (
+                              <React.Fragment key={k}>
+                                <dt className="text-slate-400">{k}</dt>
+                                <dd className="text-slate-700 font-medium">{v}</dd>
+                              </React.Fragment>
+                            ))}
+                          </dl>
+                          {order.salesNotes && (
+                            <p className="text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-2 mb-3">{order.salesNotes}</p>
+                          )}
+                          {lastEntry?.note && (
+                            <p className="text-xs bg-slate-50 border border-slate-200 text-slate-700 rounded-xl p-2 mb-3">
+                              <span className="font-bold">הערה מהתחנה הקודמת:</span> {lastEntry.note}
+                            </p>
+                          )}
+                          <button
+                            onClick={() => { setConfirmNote(''); setConfirmOrderId(order.id); }}
+                            className="mt-auto w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition cursor-pointer"
+                          >
+                            <CheckCircle2 size={16} /> סיימתי
+                            <span className="text-[11px] font-medium text-emerald-100">· הבא: {stageObj(nextStageId(order)).label}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          {myDrafts.length > 0 && (
+            <section className="mb-10">
+              <h3 className="text-base font-bold text-slate-900 mb-1">טיוטות שלא נסגרו</h3>
+              <p className="text-xs text-slate-500 mb-3">טיוטה עוברת לייצור כשסוגרים את פקודת הייצור בלשונית המכירה.</p>
+              <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                {myDrafts.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                    <span className="text-slate-700">{order.customerName} <span className="text-xs text-slate-400">· {MODELS.find(m => m.id === order.selectedModelId)?.name}</span></span>
+                    <button onClick={() => loadOrder(order)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">פתח</button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {myRecent.length > 0 && (
+            <section>
+              <h3 className="text-base font-bold text-slate-900 mb-1">סימנתי לאחרונה</h3>
+              <p className="text-xs text-slate-500 mb-3">סימנת בטעות? אפשר להחזיר את הספא לתחנה הקודמת, כל עוד אף אחד לא קידם אותו מאז.</p>
+              <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                {myRecent.map((order) => {
+                  const lastEntry = (order.stageHistory || []).at(-1);
+                  return (
+                    <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                      <span className="text-slate-700">
+                        <span className="font-mono font-bold">ספא {order.serialDigits || '—'}</span>
+                        <span className="text-xs text-slate-500"> · עבר ל"{stageObj(order.stage || 'draft').label}" · {new Date(lastEntry?.at || 0).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      </span>
+                      <button onClick={() => undoStage(order)} className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
+                        <RotateCcw size={12} /> בטל
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </main>
+      )}
+
+      {confirmOrder && (() => {
+        const from = stageObj(confirmOrder.stage || 'draft');
+        const toId = nextStageId(confirmOrder);
+        if (!toId) return null;
+        const to = stageObj(toId);
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4 print:hidden" onClick={() => !stageBusy && setConfirmOrderId(null)}>
+            <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6 select-text" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">סיום תחנה</h3>
+              <p className="text-sm text-slate-600 mb-4">
+                ספא <span className="font-mono font-bold text-slate-900">{confirmOrder.serialDigits || '—'}</span> · {MODELS.find(m => m.id === confirmOrder.selectedModelId)?.name}
+              </p>
+              <div className="flex items-center justify-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-4 text-sm font-bold">
+                <span className="text-slate-500">{from.label}</span>
+                <ArrowLeft size={16} className="text-slate-400" />
+                <span className="text-emerald-700">{to.label}</span>
+              </div>
+              {toId === 'delivered' && (
+                <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2 mb-4">הספא יסומן כנמסר ללקוח וההזמנה תעבור לארכיון.</p>
+              )}
+              <textarea
+                value={confirmNote}
+                onChange={(e) => setConfirmNote(e.target.value)}
+                placeholder="הערה לתחנה הבאה (לא חובה)"
+                rows={2}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition mb-4 resize-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => advanceStage(confirmOrder, confirmNote)}
+                  disabled={stageBusy}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-sm font-bold transition cursor-pointer"
+                >
+                  {stageBusy ? 'מעדכן…' : 'אישור'}
+                </button>
+                <button
+                  onClick={() => setConfirmOrderId(null)}
+                  disabled={stageBusy}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold transition cursor-pointer"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {activeTab === 'tracking' && (
         <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">מעקב ייצור</h2>
-              <p className="text-sm text-slate-500 mt-1">כל ספא שבתהליך ואיפה הוא עומד. ספא שנמסר ללקוח עובר לארכיון.</p>
+              <p className="text-sm text-slate-500 mt-1">כל ספא שבתהליך ואיפה הוא עומד. סיום תחנה מסמנים במסך "המשימות שלי". ספא שנמסר ללקוח עובר לארכיון.</p>
             </div>
             {ROLES[userRole]?.canEditOrder && (
               <button onClick={resetToNewOrder} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-3 rounded-2xl font-bold hover:bg-blue-700 shadow-md transition cursor-pointer">
@@ -1605,15 +1821,13 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                     .map((order) => {
                       const current = stageObj(order.stage || 'draft');
                       const model = MODELS.find(m => m.id === order.selectedModelId);
-                      const next = nextStageId(order);
-                      const allowed = canAdvance(order, userRole);
                       const site = current.id === 'equip'
                         ? (order.equipmentLocation === 'barkan' ? 'ברקן' : order.equipmentLocation === 'ashdod' ? 'אשדוד' : current.site)
                         : current.site;
                       return (
                         <tr key={order.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="py-3 px-4 font-mono font-bold text-slate-900">{order.serialDigits || '—'}</td>
-                          <td className="py-3 px-4 text-slate-700">{order.customerName}</td>
+                          <td className="py-3 px-4 text-slate-700">{showCustomer ? order.customerName : '—'}</td>
                           <td className="py-3 px-4 text-slate-600 text-xs">{model?.name}</td>
                           <td className="py-3 px-4">
                             <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold">
@@ -1627,16 +1841,6 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
-                              {next && (
-                                <button
-                                  onClick={() => advanceStage(order)}
-                                  disabled={!allowed}
-                                  title={allowed ? '' : 'התחנה הזאת מעודכנת על ידי תפקיד אחר'}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${allowed ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
-                                >
-                                  {stageObj(next).label} <ArrowLeft size={12} className="inline" />
-                                </button>
-                              )}
                               {ROLES[userRole]?.canEditOrder && (
                                 <button onClick={() => loadOrder(order)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer">
                                   פתח
