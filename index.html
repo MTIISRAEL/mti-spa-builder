@@ -312,15 +312,14 @@ const ROLES = {
   accounting: { label: 'הנהלת חשבונות', tabs: ['tracking', 'archive'], canEditOrder: false },
 };
 
-// 13 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
+// 12 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
 const STAGES = [
   { id: 'draft', label: 'טיוטה', site: 'אשדוד', roles: ['sales', 'planner'] },
   { id: 'approved', label: 'אושרה לייצור', site: 'אשדוד', roles: ['sales', 'planner'] },
   { id: 'kit-prep', label: 'קיט בהכנה', site: 'אשדוד', roles: ['warehouse'] },
   { id: 'kit-sent', label: 'קיט נשלח לברקן', site: 'אשדוד', roles: ['warehouse'] },
   { id: 'shell', label: 'קליפה בייצור / בייבוא', site: 'ברקן', roles: ['factory', 'warehouse'] },
-  { id: 'drill', label: 'קדיחה', site: 'ברקן', roles: ['factory'] },
-  { id: 'sand', label: 'שפשוף', site: 'ברקן', roles: ['factory'] },
+  { id: 'drill', label: 'קדיחה ושפשוף', site: 'ברקן', roles: ['factory'] },
   { id: 'cladding', label: 'חיפוי', site: 'ברקן', roles: ['factory'] },
   { id: 'equip', label: 'איבזור', site: 'אשדוד או ברקן', roles: ['factory', 'planner', 'warehouse'] },
   { id: 'test', label: 'טסט, ניקיון ואריזה', site: 'אשדוד', roles: ['warehouse', 'planner'] },
@@ -329,7 +328,8 @@ const STAGES = [
   { id: 'delivered', label: 'נמסר ללקוח', site: 'אשדוד', roles: ['sales'] },
 ];
 
-const stageIndex = (id: string) => Math.max(0, STAGES.findIndex(s => s.id === id));
+// הזמנה שנשמרה כשקדיחה ושפשוף היו שתי תחנות נפרדות עשויה להחזיק עדיין 'sand'
+const stageIndex = (id: string) => Math.max(0, STAGES.findIndex(s => s.id === (id === 'sand' ? 'drill' : id)));
 const stageObj = (id: string) => STAGES[stageIndex(id)];
 
 // חיפוי נעשה רק בהתקנה עילית, לכן בהתקנה שקועה התחנה נדלגת
@@ -1565,7 +1565,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
 
           <div className="flex flex-wrap gap-2 mb-6">
             {STAGES.filter(s => s.id !== 'delivered').map((s) => {
-              const count = activeOrders.filter(o => (o.stage || 'draft') === s.id).length;
+              const count = activeOrders.filter(o => stageObj(o.stage || 'draft').id === s.id).length;
               return (
                 <button
                   key={s.id}
@@ -1599,7 +1599,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                 </thead>
                 <tbody>
                   {activeOrders
-                    .filter(o => !stageFilter || (o.stage || 'draft') === stageFilter)
+                    .filter(o => !stageFilter || stageObj(o.stage || 'draft').id === stageFilter)
                     .sort((a, b) => stageIndex(b.stage || 'draft') - stageIndex(a.stage || 'draft'))
                     .map((order) => {
                       const current = stageObj(order.stage || 'draft');
