@@ -108,9 +108,15 @@ interface OrderData {
   selectedCabinet: string;
   selectedPhase: 'single' | 'three';
   installationType: 'above-ground' | 'semi-inground' | 'fully-inground';
-  shellSource: '' | 'barkan' | 'import';
+  shellSource: '' | 'stock' | 'barkan' | 'import';
   equipmentLocation: '' | 'ashdod' | 'barkan';
   deliveryMethod: '' | 'pickup' | 'installation';
+  jetColor?: '' | 'light' | 'nickel' | 'dark';
+  jetSuppliers?: string[];
+  controller?: '' | 'bp2100' | '200ux';
+  spaTouch4?: boolean;
+  ozone?: boolean;
+  uv?: boolean;
   selectedAccessories: string[];
   lightedSidesCount: number;
   salesNotes: string;
@@ -192,10 +198,26 @@ const INSTALLATION_TYPES = [
   { id: 'fully-inground', label: 'שקועה לגמרי', desc: 'בתוך בור קו אפס' },
 ];
 
-// שלוש החלטות שאשדוד מקבל בשלב המכירה, וכל אתר עובד לפיהן
+// שלוש החלטות ייצור שקובי מקבל בבדיקה הטכנית, וכל אתר עובד לפיהן
 const SHELL_SOURCES = [
+  { id: 'stock', label: 'קיימת במלאי', desc: 'הקליפה כבר בברקן' },
   { id: 'barkan', label: 'ייצור בברקן', desc: 'הקליפה מיוצרת במפעל' },
-  { id: 'import', label: 'ייבוא מסין', desc: 'נשלחת מאשדוד לברקן' },
+  { id: 'import', label: 'ייבוא', desc: 'מיובאת ונשלחת לברקן' },
+];
+
+// גוון הג'טים נבחר במכירה; לא לכל ספק יש כל הסדרות, והרשימה המדויקת לכל ספק תיקבע בהמשך
+const JET_COLORS = [
+  { id: 'light', label: 'בהירים' },
+  { id: 'nickel', label: 'ניקל' },
+  { id: 'dark', label: 'כהים' },
+];
+
+const JET_SUPPLIERS = ['CMP', 'Monalisa', 'Las Water'];
+
+// כל מחשב Balboa בא עם הפאנל שלו; Spa Touch 4 מחליף את הפאנל בכל אחד מהם ומוסיף WiFi
+const CONTROLLERS = [
+  { id: 'bp2100', label: 'Balboa BP2100', panelType: 'panel-tp700', panelLabel: 'TP700' },
+  { id: '200ux', label: 'Balboa 200UX', panelType: 'panel-tp500', panelLabel: 'TP500' },
 ];
 
 const EQUIPMENT_LOCATIONS = [
@@ -217,7 +239,7 @@ const SALES_ACCESSORIES = [
   { id: 'umbrella-sun', category: 'בטיחות וצל', label: 'שמשיית ספא ייעודית SpaUmbrella (בד Sunbrella)' },
   { id: 'steps-custom', category: 'מדרגות וסולם', label: 'מדרגות כניסה תואמות לגוון החיפוי' },
   { id: 'audio-bt', category: 'מולטימדיה ופינוק', label: 'מערכת שמע Bluetooth + 2 רמקולים מוגני מים' },
-  { id: 'ozone-uv', category: 'חיטוי ובידוד', label: 'מערכת חיטוי אוזון / UV מתקדמת' },
+  { id: 'sand-filter', category: 'סינון', label: 'פילטר חול' },
   { id: 'winter-insul', category: 'חיטוי ובידוד', label: 'בידוד תרמי מוגבר לחורף (שכבה כפולה)' },
 ];
 
@@ -305,21 +327,24 @@ const db = getFirestore(firebaseApp);
 
 // התפקידים לפי האפיון. התפקיד נשמר במסמך users/<uid> ונקבע על ידי המנהל בלבד.
 const ROLES = {
-  admin: { label: 'מנהל', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive', 'presets'], canEditOrder: true },
-  sales: { label: 'איש מכירות', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
-  planner: { label: 'מתכנן איבזור', tabs: ['sales', 'production', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
+  admin: { label: 'מנהל', tabs: ['sales', 'production', 'tech', 'warehouse', 'tasks', 'tracking', 'archive', 'presets'], canEditOrder: true },
+  sales: { label: 'איש מכירות', tabs: ['sales', 'production', 'tech', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
+  planner: { label: 'מתכנן איבזור', tabs: ['sales', 'production', 'tech', 'warehouse', 'tasks', 'tracking', 'archive'], canEditOrder: true },
+  kit: { label: 'הכנת קיט', tabs: ['tasks', 'warehouse', 'tracking', 'archive'], canEditOrder: false },
   warehouse: { label: 'מחסנאי', tabs: ['tasks', 'warehouse', 'tracking', 'archive'], canEditOrder: false },
   factory: { label: 'מפעל — ברקן', tabs: ['tasks', 'tracking', 'production', 'archive'], canEditOrder: false },
   accounting: { label: 'הנהלת חשבונות', tabs: ['tasks', 'tracking', 'archive'], canEditOrder: false },
 };
 
-// 14 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
+// 15 תחנות המעקב. roles = מי רשאי להעביר את ההזמנה הלאה מהתחנה הזאת (מנהל תמיד רשאי).
+// טיוטה ובדיקה טכנית עוברות רק דרך הכפתורים במסכי המכירה והבדיקה, שם נבדקים שדות החובה.
 const STAGES = [
-  { id: 'draft', label: 'טיוטה', site: 'אשדוד', roles: ['sales', 'planner'] },
-  { id: 'approved', label: 'אושרה לייצור', site: 'אשדוד', roles: ['sales', 'planner'] },
-  { id: 'kit-prep', label: 'קיט בהכנה', site: 'אשדוד', roles: ['warehouse'] },
+  { id: 'draft', label: 'טיוטת מכירה', site: 'אשדוד', roles: ['sales', 'planner'] },
+  { id: 'tech-review', label: 'בדיקה טכנית', site: 'אשדוד — קובי', roles: [] },
+  { id: 'kit-list', label: 'הכנת קיט', site: 'אשדוד', roles: ['kit'] },
+  { id: 'picking', label: 'ליקוט', site: 'אשדוד', roles: ['warehouse'] },
   { id: 'kit-sent', label: 'קיט נשלח לברקן', site: 'אשדוד', roles: ['warehouse'] },
-  { id: 'shell', label: 'קליפה בייצור / בייבוא', site: 'ברקן', roles: ['factory', 'warehouse'] },
+  { id: 'shell', label: 'קליפה', site: 'ברקן', roles: ['factory', 'warehouse'] },
   { id: 'frame', label: 'גישטל', site: 'ברקן', roles: ['factory'] },
   { id: 'drill', label: 'קדיחה ושפשוף', site: 'ברקן', roles: ['factory'] },
   { id: 'cladding', label: 'חיפוי', site: 'ברקן', roles: ['factory'] },
@@ -331,13 +356,19 @@ const STAGES = [
   { id: 'delivered', label: 'נמסר ללקוח', site: 'אשדוד', roles: ['sales'] },
 ];
 
-// הזמנה שנשמרה כשקדיחה ושפשוף היו שתי תחנות נפרדות עשויה להחזיק עדיין 'sand'
-const stageIndex = (id: string) => Math.max(0, STAGES.findIndex(s => s.id === (id === 'sand' ? 'drill' : id)));
+// הזמנות שנשמרו לפני שינוי התחנות עשויות להחזיק מזהים ישנים
+const LEGACY_STAGES: Record<string, string> = { sand: 'drill', approved: 'kit-list', 'kit-prep': 'picking' };
+const stageIndex = (id: string) => Math.max(0, STAGES.findIndex(s => s.id === (LEGACY_STAGES[id] || id)));
 const stageObj = (id: string) => STAGES[stageIndex(id)];
+const TECH_REVIEW_INDEX = STAGES.findIndex(s => s.id === 'tech-review');
 
-// חיפוי נעשה רק בהתקנה עילית, לכן בהתקנה שקועה התחנה נדלגת
+// אחרי הבדיקה הטכנית ההזמנה נעולה, ורק מנהל יכול לשנות או לפתוח אותה מחדש
+const isLockedOrder = (order: any) => !!order && stageIndex(order.stage || 'draft') > TECH_REVIEW_INDEX;
+
+// חיפוי נעשה רק בהתקנה עילית; הקיט נשלח לברקן רק כשהאיבזור נעשה שם
 const isStageRelevant = (stage: string, order: any) =>
-  !(stage === 'cladding' && order?.installationType && order.installationType !== 'above-ground');
+  !(stage === 'cladding' && order?.installationType && order.installationType !== 'above-ground')
+  && !(stage === 'kit-sent' && order?.equipmentLocation === 'ashdod');
 
 const nextStageId = (order: any) => {
   for (let i = stageIndex(order.stage || 'draft') + 1; i < STAGES.length; i++) {
@@ -400,9 +431,15 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
   const [selectedCabinet, setSelectedCabinet] = useState(CABINET_COLORS[0].id);
   const [selectedPhase, setSelectedPhase] = useState<'single' | 'three'>('three');
   const [installationType, setInstallationType] = useState<'above-ground' | 'semi-inground' | 'fully-inground'>('above-ground');
-  const [shellSource, setShellSource] = useState<'' | 'barkan' | 'import'>('');
+  const [shellSource, setShellSource] = useState<'' | 'stock' | 'barkan' | 'import'>('');
   const [equipmentLocation, setEquipmentLocation] = useState<'' | 'ashdod' | 'barkan'>('');
   const [deliveryMethod, setDeliveryMethod] = useState<'' | 'pickup' | 'installation'>('');
+  const [jetColor, setJetColor] = useState<'' | 'light' | 'nickel' | 'dark'>('');
+  const [jetSuppliers, setJetSuppliers] = useState<string[]>([]);
+  const [controller, setController] = useState<'' | 'bp2100' | '200ux'>('');
+  const [spaTouch4, setSpaTouch4] = useState(false);
+  const [ozone, setOzone] = useState(false);
+  const [uv, setUv] = useState(false);
   const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
   const [lightedSidesCount, setLightedSidesCount] = useState<number>(0);
   const [salesNotes, setSalesNotes] = useState<string>('');
@@ -654,6 +691,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
     setShellSource('');
     setEquipmentLocation('');
     setDeliveryMethod('');
+    setJetColor(''); setJetSuppliers([]); setController(''); setSpaTouch4(false); setOzone(false); setUv(false);
     setSelectedAccessories([]);
     setLightedSidesCount(0);
     setSalesNotes('');
@@ -665,24 +703,43 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
     setActiveTab('production');
   };
 
-  const handleSaveOrder = async (status: 'draft' | 'final') => {
+  const editingOrder = orders.find(o => o.id === editingOrderId) || null;
+  const editingLocked = isLockedOrder(editingOrder) && userRole !== 'admin';
+
+  // save = שמירה בלי מעבר תחנה; submit = המוכר מסיים מכירה ושולח לבדיקה טכנית;
+  // approve = קובי מאשר את הבדיקה הטכנית וההזמנה עוברת להכנת קיט
+  const handleSaveOrder = async (action: 'save' | 'submit' | 'approve') => {
     if (!customerName.trim() || !customerAddress.trim() || !customerPhone.trim()) {
       alert('יש למלא שם לקוח, כתובת וטלפון לפני שמירת ההזמנה!');
       return;
     }
-    if (status === 'final' && serialDigits.length !== 4) {
-      alert('חובה להקצות מספר ספא תקין (4 ספרות) לפני סגירת הפקודה לייצור!');
+    const existing = editingOrder;
+    if (isLockedOrder(existing) && userRole !== 'admin') {
+      alert('ההזמנה כבר עברה בדיקה טכנית ונעולה. רק קובי יכול לשנות אותה או לפתוח אותה מחדש.');
       return;
     }
-    if (status === 'final' && (!shellSource || !equipmentLocation || !deliveryMethod)) {
-      alert('חובה לבחור מקור קליפה, מקום איבזור ואופן מסירה (בלשונית התכנון) לפני סגירת הפקודה לייצור!');
-      setActiveTab('production');
-      return;
+    if (action === 'approve') {
+      if (userRole !== 'admin') { alert('רק קובי מאשר בדיקה טכנית.'); return; }
+      const missing = [
+        serialDigits.length !== 4 && 'מספר ספא (4 ספרות)',
+        !jetColor && 'גוון ג\'טים',
+        jetSuppliers.length === 0 && 'ספק ג\'טים',
+        !controller && 'מחשב',
+        !shellSource && 'מקור הקליפה',
+        !equipmentLocation && 'מקום האיבזור',
+        !deliveryMethod && 'אופן מסירה',
+      ].filter(Boolean);
+      if (missing.length > 0) {
+        alert(`חסר לפני אישור הבדיקה הטכנית: ${missing.join(', ')}`);
+        setActiveTab('tech');
+        return;
+      }
     }
-    const existing = orders.find(o => o.id === editingOrderId);
     const currentStage = existing?.stage || 'draft';
-    // סגירת פקודה לייצור מקדמת מטיוטה לאישור; הזמנה שכבר בייצור נשארת בתחנה שלה
-    const nextStage = status === 'final' && currentStage === 'draft' ? 'approved' : currentStage;
+    const currentIdx = stageIndex(currentStage);
+    let nextStage = currentStage;
+    if (action === 'submit' && currentIdx < TECH_REVIEW_INDEX) nextStage = 'tech-review';
+    if (action === 'approve' && currentIdx <= TECH_REVIEW_INDEX) nextStage = 'kit-list';
     const nextHistory = nextStage === currentStage
       ? (existing?.stageHistory || [])
       : [...(existing?.stageHistory || []), { stage: nextStage, at: Date.now(), by: currentUser?.email || '' }];
@@ -693,7 +750,9 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
       serialDigits: serialDigits || '',
       selectedModelId, selectedEquipmentSku, selectedAcrylicCode, selectedCabinet, selectedPhase,
       installationType, shellSource, equipmentLocation, deliveryMethod,
-      selectedAccessories, lightedSidesCount, salesNotes, placedItems, status,
+      jetColor, jetSuppliers, controller, spaTouch4, ozone, uv,
+      selectedAccessories, lightedSidesCount, salesNotes, placedItems,
+      status: stageIndex(nextStage) > TECH_REVIEW_INDEX ? 'final' : 'draft',
       stage: nextStage, stageHistory: nextHistory,
       updatedAt: Date.now(), updatedBy: currentUser?.email || ''
     };
@@ -705,20 +764,48 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
       return;
     }
     if (!editingOrderId) setEditingOrderId(orderToSave.id);
-    if (status === 'draft') alert('ההזמנה נשמרה כטיוטה בהצלחה!');
-    else { alert(`פקודת עבודה לספא מס׳ ${serialDigits} נסגרה ואושרה לייצור בהצלחה!`); setActiveTab('archive'); }
+    if (action === 'save') alert('ההזמנה נשמרה.');
+    else if (action === 'submit') { alert('המכירה נשלחה לבדיקה טכנית.'); setActiveTab('tasks'); }
+    else { alert(`ספא ${serialDigits} אושר ונשלח להכנת קיט.`); setActiveTab('tasks'); }
   };
 
-  const loadOrder = (order: OrderData) => {
+  // רק קובי פותח מחדש הזמנה נעולה; היא חוזרת לבדיקה טכנית ומשם ממשיכה כרגיל
+  const reopenOrder = async (order: OrderData) => {
+    if (userRole !== 'admin') return;
+    if (!confirm(`לפתוח מחדש את ספא ${order.serialDigits || ''}? ההזמנה תחזור לבדיקה טכנית.`)) return;
+    try {
+      await setDoc(doc(db, 'orders', order.id), {
+        stage: 'tech-review',
+        status: 'draft',
+        stageHistory: [...(order.stageHistory || []), { stage: 'tech-review', at: Date.now(), by: currentUser?.email || '', note: 'נפתחה מחדש' }],
+        updatedAt: Date.now(),
+        updatedBy: currentUser?.email || '',
+      }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      alert('הפתיחה מחדש נכשלה. בדוק חיבור לאינטרנט והרשאות.');
+    }
+  };
+
+  // החלפת מחשב או שדרוג ל-Spa Touch 4 מחליפה את הפאנל בשרטוט, באותו מקום
+  const applyPanelChoice = (nextController: string, nextSpaTouch4: boolean) => {
+    const panelType = nextSpaTouch4 ? 'panel-st4' : CONTROLLERS.find(c => c.id === nextController)?.panelType;
+    const tool = JETS_TOOLS.find(t => t.type === panelType);
+    if (tool && !placedItems.some(it => it.type === tool.type)) addJetToCanvas(tool);
+  };
+
+  const loadOrder = (order: OrderData, tab: string = 'sales') => {
     setEditingOrderId(order.id);
     setCustomerName(order.customerName || ''); setCustomerAddress(order.customerAddress || ''); setCustomerPhone(order.customerPhone || '');
     setSerialDigits(order.serialDigits); setSelectedModelId(order.selectedModelId); setSelectedEquipmentSku(order.selectedEquipmentSku); setSelectedAcrylicCode(order.selectedAcrylicCode); setSelectedCabinet(order.selectedCabinet); setSelectedPhase(order.selectedPhase);
     setInstallationType(order.installationType || 'above-ground');
     setShellSource(order.shellSource || ''); setEquipmentLocation(order.equipmentLocation || ''); setDeliveryMethod(order.deliveryMethod || '');
+    setJetColor(order.jetColor || ''); setJetSuppliers(order.jetSuppliers || []); setController(order.controller || '');
+    setSpaTouch4(!!order.spaTouch4); setOzone(!!order.ozone); setUv(!!order.uv);
     setSelectedAccessories(order.selectedAccessories); setLightedSidesCount(order.lightedSidesCount || 0);
     setSalesNotes(order.salesNotes || '');
     setPlacedItems(order.placedItems.length > 0 ? order.placedItems : getLayoutFor(order.selectedModelId, order.selectedEquipmentSku, presets));
-    setActiveTab('sales');
+    setActiveTab(tab as any);
   };
 
   const activeOrders = orders.filter(o => (o.stage || 'draft') !== 'delivered');
@@ -752,9 +839,11 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
   // רק מי שסימן את המעבר האחרון רשאי לבטל אותו, וכל עוד אף אחד לא קידם את הספא מאז
   const canUndo = (order: OrderData) => (order.stageHistory || []).at(-1)?.by === currentUser?.email;
 
-  // טיוטה עוברת לאישור רק דרך סגירת הפקודה בלשונית המכירה, שם נבדקים השדות החובה
-  const myQueue = activeOrders.filter(o => stageObj(o.stage || 'draft').id !== 'draft' && nextStageId(o) && canAdvance(o, userRole));
+  // טיוטה ובדיקה טכנית עוברות רק דרך הכפתורים במסכי המכירה והבדיקה, שם נבדקים שדות החובה
+  const isFormStage = (o: OrderData) => ['draft', 'tech-review'].includes(stageObj(o.stage || 'draft').id);
+  const myQueue = activeOrders.filter(o => !isFormStage(o) && nextStageId(o) && canAdvance(o, userRole));
   const myDrafts = ROLES[userRole]?.canEditOrder ? activeOrders.filter(o => stageObj(o.stage || 'draft').id === 'draft') : [];
+  const techQueue = ROLES[userRole]?.canEditOrder ? activeOrders.filter(o => stageObj(o.stage || 'draft').id === 'tech-review') : [];
   const myRecent = orders
     .filter(canUndo)
     .sort((a, b) => (b.stageHistory?.at(-1)?.at || 0) - (a.stageHistory?.at(-1)?.at || 0))
@@ -774,7 +863,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
     try {
       await setDoc(doc(db, 'orders', order.id), {
         stage: back,
-        status: back === 'draft' ? 'draft' : 'final',
+        status: stageIndex(back) > TECH_REVIEW_INDEX ? 'final' : 'draft',
         stageHistory: history.slice(0, -1),
         updatedAt: Date.now(),
         updatedBy: currentUser?.email || '',
@@ -945,7 +1034,8 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             <h1 className="text-lg font-bold text-slate-900 leading-tight">M.T.I - מערכת ייצור</h1>
             <p className="text-xs text-slate-500">
               {activeTab === 'sales' && 'שלב 1: מפרט הזמנה (תצוגה שיווקית)'}
-              {activeTab === 'production' && `שלב 2: תכנון הנדסי ושרטוט - ${fullSpaTitle}`}
+              {activeTab === 'production' && `סקיצה ושרטוט - ${fullSpaTitle}`}
+              {activeTab === 'tech' && 'בדיקה טכנית — קובי עם המוכר'}
               {activeTab === 'warehouse' && 'שלב 3: רשימת ליקוט רכיבים למחסן'}
               {activeTab === 'tasks' && 'המשימות שלי — ספא שמחכים לך'}
               {activeTab === 'tracking' && 'מעקב ייצור — איפה כל ספא עומד'}
@@ -967,14 +1057,19 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                 <Compass size={16} /> <span className="hidden md:inline">2.</span> תכנון
               </button>
             )}
+            {allowedTabs.includes('tech') && (
+              <button onClick={() => setActiveTab('tech')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'tech' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
+                <Wrench size={16} /> <span className="hidden md:inline">3.</span> בדיקה טכנית
+              </button>
+            )}
             {allowedTabs.includes('warehouse') && (
               <button onClick={() => setActiveTab('warehouse')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-                <ClipboardList size={16} /> <span className="hidden md:inline">3.</span> ליקוט למחסן
+                <ClipboardList size={16} /> <span className="hidden md:inline">4.</span> ליקוט למחסן
               </button>
             )}
             {allowedTabs.includes('tasks') && (
               <button onClick={() => setActiveTab('tasks')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'tasks' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-                <ListChecks size={16} /> המשימות שלי ({myQueue.length})
+                <ListChecks size={16} /> המשימות שלי ({myQueue.length + (userRole === 'admin' ? techQueue.length : 0)})
               </button>
             )}
             {allowedTabs.includes('tracking') && (
@@ -989,7 +1084,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             )}
             {allowedTabs.includes('presets') && (
               <button onClick={() => setActiveTab('presets')} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs md:text-sm font-bold transition cursor-pointer ${activeTab === 'presets' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>
-                <Settings size={16} /> <span className="hidden md:inline">5.</span> תבניות
+                <Settings size={16} /> תבניות
               </button>
             )}
           </div>
@@ -1017,9 +1112,22 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
               </div>
             </div>
 
+            {editingOrder && stageObj(editingOrder.stage || 'draft').id !== 'draft' && (
+              <div className={`p-4 rounded-2xl border text-sm font-bold flex flex-wrap items-center justify-between gap-3 ${isLockedOrder(editingOrder) ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-blue-50 border-blue-200 text-blue-900'}`}>
+                <span>
+                  {isLockedOrder(editingOrder)
+                    ? `ההזמנה עברה בדיקה טכנית ונעולה (תחנה: ${stageObj(editingOrder.stage || 'draft').label}). רק קובי יכול לשנות או לפתוח אותה מחדש.`
+                    : 'ההזמנה בבדיקה טכנית אצל קובי.'}
+                </span>
+                {isLockedOrder(editingOrder) && userRole === 'admin' && (
+                  <button type="button" onClick={() => reopenOrder(editingOrder)} className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer">פתח מחדש</button>
+                )}
+              </div>
+            )}
+
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
-              <label className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><User className="text-blue-600" size={20} /> פרטי לקוח ומספר ספא</label>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <label className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2"><User className="text-blue-600" size={20} /> פרטי לקוח</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="relative">
                   <User size={16} className="absolute right-3 top-3 text-slate-400" />
                   <input type="text" placeholder="שם לקוח" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full pr-9 pl-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
@@ -1031,10 +1139,6 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                 <div className="relative">
                   <Phone size={16} className="absolute right-3 top-3 text-slate-400" />
                   <input type="tel" placeholder="טלפון" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="w-full pr-9 pl-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
-                </div>
-                <div className="relative">
-                  <Hash size={16} className="absolute right-3 top-3 text-blue-500" />
-                  <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} placeholder="מספר ספא (4 ספרות)" value={serialDigits} onChange={handleSerialChange} className="w-full pr-9 pl-3 py-2.5 border border-blue-200 rounded-xl text-sm bg-blue-50/50 font-mono tracking-[0.15em] text-blue-800 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition" />
                 </div>
               </div>
             </div>
@@ -1210,8 +1314,20 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             </div>
 
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
+              <label className="block text-base font-bold text-slate-900 mb-1 flex items-center gap-2"><Sparkles className="text-blue-600" size={20} /> 8. גוון ג׳טים</label>
+              <p className="text-sm text-slate-500 mb-4">הוספה או הורדה של ג׳טים בסקיצה נעשית בלשונית התכנון.</p>
+              <div className="grid grid-cols-3 gap-3">
+                {JET_COLORS.map((c) => (
+                  <button type="button" key={c.id} onClick={() => setJetColor(c.id as any)} className={`py-3 px-4 rounded-2xl border text-center transition text-sm font-bold cursor-pointer ${jetColor === c.id ? 'border-blue-600 bg-blue-50 text-blue-900 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <div className="mb-6">
-                <label className="text-lg font-bold text-slate-900 flex items-center gap-2"><Award className="text-amber-500" size={24} /> 8. תוספות שדרוג ויוקרה</label>
+                <label className="text-lg font-bold text-slate-900 flex items-center gap-2"><Award className="text-amber-500" size={24} /> 9. תוספות שדרוג ויוקרה</label>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {SALES_ACCESSORIES.map((acc) => {
@@ -1232,7 +1348,7 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition duration-300">
               <div className="mb-4">
                 <label className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <MessageSquare className="text-blue-600" size={24} /> 9. הערות ורשמים מהשיחה עם הלקוח
+                  <MessageSquare className="text-blue-600" size={24} /> 10. הערות ורשמים מהשיחה עם הלקוח
                 </label>
                 <p className="text-sm text-slate-500 mt-1">רשום כאן כל פרט רלוונטי, בקשות מיוחדות, דגשים להתקנה או הערות לייצור שיעברו למחסנאי.</p>
               </div>
@@ -1245,12 +1361,14 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             </div>
 
             <div className="pt-4 flex flex-col sm:flex-row gap-4">
-              <button type="button" onClick={() => handleSaveOrder('draft')} className="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-base transition cursor-pointer">
+              <button type="button" onClick={() => handleSaveOrder('save')} disabled={editingLocked} className="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed text-amber-900 border border-amber-300 font-bold text-base transition cursor-pointer">
                 <Save size={18} /> שמור טיוטה (המשך אחר כך)
               </button>
-              <button type="button" onClick={goToProduction} className="flex-[2] flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-lg shadow-blue-600/20 transition cursor-pointer">
-                <span>המשך לשלב 2: תכנון הנדסי ושרטוט</span> <ArrowLeft size={20} />
-              </button>
+              {(!editingOrder || stageObj(editingOrder.stage || 'draft').id === 'draft') && (
+                <button type="button" onClick={() => handleSaveOrder('submit')} className="flex-[2] flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-lg shadow-blue-600/20 transition cursor-pointer">
+                  <span>סיים מכירה ושלח לבדיקה טכנית</span> <ArrowLeft size={20} />
+                </button>
+              )}
             </div>
           </div>
 
@@ -1319,9 +1437,9 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
 
                 <div className="space-y-3 mt-auto pt-4">
                   <button type="button" onClick={goToProduction} className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-600/20 transition cursor-pointer">
-                    המשך לתכנון הנדסי ושרטוט <ArrowLeft size={18} />
+                    לסקיצה — הוספה והורדה של ג׳טים <ArrowLeft size={18} />
                   </button>
-                  <button type="button" onClick={() => handleSaveOrder('draft')} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 font-bold text-sm transition cursor-pointer">
+                  <button type="button" onClick={() => handleSaveOrder('save')} disabled={editingLocked} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 border border-slate-200 font-bold text-sm transition cursor-pointer">
                     <Save size={16} /> שמור הצעת מחיר כטיוטה
                   </button>
                 </div>
@@ -1341,34 +1459,10 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                 {serialDigits.length === 4 ? (
                   <div className="bg-white border border-blue-300 rounded-xl p-2 text-lg font-mono font-bold tracking-[0.2em] text-blue-700 text-center">{serialDigits}</div>
                 ) : (
-                  <button type="button" onClick={() => setActiveTab('sales')} className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-bold text-amber-800 cursor-pointer hover:bg-amber-50 transition">
-                    טרם הוקצה — להקצאה בשלב המכירה
-                  </button>
+                  <div className="w-full bg-white border border-amber-300 rounded-xl p-2 text-xs font-bold text-amber-800 text-center">
+                    טרם הוקצה — יוקצה בבדיקה הטכנית
+                  </div>
                 )}
-              </div>
-
-              <div className="p-4 rounded-2xl border border-slate-200 bg-white">
-                <label className="block text-xs font-bold text-slate-900 mb-0.5 flex items-center gap-1.5"><Compass size={15} className="text-blue-600" /> החלטות ייצור</label>
-                <p className="text-[11px] text-slate-500 mb-3">חובה לפני סגירת הפקודה לייצור.</p>
-                <div className="space-y-3">
-                  {[
-                    { title: 'מקור הקליפה', options: SHELL_SOURCES, value: shellSource, set: setShellSource },
-                    { title: 'מקום האיבזור', options: EQUIPMENT_LOCATIONS, value: equipmentLocation, set: setEquipmentLocation },
-                    { title: 'אופן מסירה', options: DELIVERY_METHODS, value: deliveryMethod, set: setDeliveryMethod },
-                  ].map((group) => (
-                    <div key={group.title}>
-                      <div className="text-[11px] font-bold text-slate-600 mb-1">{group.title}</div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {group.options.map((opt) => (
-                          <button type="button" key={opt.id} disabled={!ROLES[userRole]?.canEditOrder} onClick={() => group.set(opt.id as any)} className={`px-2 py-1.5 rounded-xl border text-right transition cursor-pointer disabled:cursor-default ${group.value === opt.id ? 'border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100'}`}>
-                            <div className={`text-xs font-bold ${group.value === opt.id ? 'text-blue-950' : 'text-slate-700'}`}>{opt.label}</div>
-                            <div className="text-[10px] text-slate-500 leading-tight">{opt.desc}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
 
               {salesNotes && (
@@ -1411,8 +1505,12 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             </div>
 
             <div className="space-y-2 pt-4 border-t border-slate-100 mt-4">
-              <button onClick={() => handleSaveOrder('draft')} className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs transition cursor-pointer"><Save size={14} /> שמור כטיוטה להמשך</button>
-              <button onClick={() => setActiveTab('warehouse')} className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition cursor-pointer"><ClipboardList size={16} /> המשך לשלב 3: רשימת ליקוט</button>
+              {ROLES[userRole]?.canEditOrder && (
+                <button onClick={() => handleSaveOrder('save')} disabled={editingLocked} className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed text-amber-900 border border-amber-300 font-bold text-xs transition cursor-pointer"><Save size={14} /> שמור שינויים בסקיצה</button>
+              )}
+              {allowedTabs.includes('tech') && (
+                <button onClick={() => setActiveTab('tech')} className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition cursor-pointer"><Wrench size={16} /> לבדיקה הטכנית</button>
+              )}
               <button onClick={() => setActiveTab('sales')} className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-medium transition cursor-pointer"><ArrowRight size={14} /> חזור לשלב המכירה</button>
             </div>
           </aside>
@@ -1481,6 +1579,134 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
         </div>
       )}
 
+      {activeTab === 'tech' && (() => {
+        const canEditTech = userRole === 'admin';
+        const stageNow = editingOrder ? stageObj(editingOrder.stage || 'draft') : null;
+        const chip = (active: boolean) => `px-3 py-2.5 rounded-2xl border text-right transition text-sm font-bold disabled:cursor-default ${active ? 'border-blue-600 bg-blue-50 text-blue-950 ring-2 ring-blue-600/20' : 'border-slate-200 bg-slate-50 text-slate-700 enabled:hover:bg-slate-100 enabled:cursor-pointer'}`;
+        const card = 'bg-white p-5 rounded-3xl border border-slate-200 shadow-sm';
+        const title = 'text-base font-bold text-slate-900 mb-3 flex items-center gap-2';
+        return (
+          <main className="max-w-5xl mx-auto p-6 md:p-8 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">בדיקה טכנית</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {customerName || 'הזמנה חדשה'} · {currentModelObj?.name}
+                  {stageNow && <> · תחנה: <span className="font-bold text-slate-700">{stageNow.label}</span></>}
+                </p>
+              </div>
+              {!canEditTech && <span className="text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2">צפייה בלבד — קובי ממלא את הבדיקה</span>}
+            </div>
+
+            {!editingOrder && (
+              <div className="mb-6 p-4 rounded-2xl border border-amber-300 bg-amber-50 text-sm font-bold text-amber-900">
+                ההזמנה עוד לא נשמרה. בדרך כלל פותחים בדיקה טכנית מתוך "המשימות שלי", אחרי שהמוכר סיים את המכירה.
+              </div>
+            )}
+            {editingOrder && isLockedOrder(editingOrder) && (
+              <div className="mb-6 p-4 rounded-2xl border border-amber-300 bg-amber-50 text-sm font-bold text-amber-900 flex flex-wrap items-center justify-between gap-3">
+                <span>הבדיקה הטכנית כבר אושרה וההזמנה נעולה. רק קובי יכול לפתוח אותה מחדש.</span>
+                {canEditTech && <button type="button" onClick={() => reopenOrder(editingOrder)} className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer">פתח מחדש</button>}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className={card}>
+                <div className={title}><Hash className="text-blue-600" size={18} /> מספר ספא</div>
+                <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={4} disabled={!canEditTech} placeholder="4 ספרות" value={serialDigits} onChange={handleSerialChange} className="w-full px-3 py-2.5 border border-blue-200 rounded-xl text-lg bg-blue-50/50 font-mono tracking-[0.3em] text-blue-800 text-center focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition disabled:opacity-70" />
+              </div>
+
+              <div className={card}>
+                <div className={title}><Wrench className="text-blue-600" size={18} /> רמת איבזור</div>
+                <p className="text-xs text-slate-500 -mt-2 mb-3">קובעת כמה מנועים, ג׳טים ואלמנטים יהיו. שינוי טוען מחדש את פריסת הג׳טים.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {currentModelObj?.equipments.map((eq) => (
+                    <button type="button" key={eq.sku} disabled={!canEditTech} onClick={() => { if (eq.sku !== selectedEquipmentSku && confirm('שינוי רמת האיבזור יטען מחדש את פריסת הג׳טים בשרטוט. להמשיך?')) handleEquipmentSelect(eq.sku); }} className={chip(selectedEquipmentSku === eq.sku)}>
+                      {eq.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={card}>
+                <div className={title}><Sparkles className="text-blue-600" size={18} /> ג׳טים</div>
+                <div className="text-xs font-bold text-slate-600 mb-1.5">גוון (נבחר במכירה)</div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {JET_COLORS.map((c) => (
+                    <button type="button" key={c.id} disabled={!canEditTech} onClick={() => setJetColor(c.id as any)} className={chip(jetColor === c.id)}>{c.label}</button>
+                  ))}
+                </div>
+                <div className="text-xs font-bold text-slate-600 mb-1.5">ספקים (אפשר לשלב)</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {JET_SUPPLIERS.map((s) => (
+                    <button type="button" key={s} disabled={!canEditTech} onClick={() => setJetSuppliers(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} className={chip(jetSuppliers.includes(s))} dir="ltr">{s}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={card}>
+                <div className={title}><Zap className="text-blue-600" size={18} /> מחשב ופאנל</div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {CONTROLLERS.map((c) => (
+                    <button type="button" key={c.id} disabled={!canEditTech} onClick={() => { setController(c.id as any); applyPanelChoice(c.id, spaTouch4); }} className={chip(controller === c.id)}>
+                      <div dir="ltr" className="text-right">{c.label}</div>
+                      <div className="text-[11px] font-medium text-slate-500">פאנל {c.panelLabel}</div>
+                    </button>
+                  ))}
+                </div>
+                <button type="button" disabled={!canEditTech} onClick={() => { setSpaTouch4(!spaTouch4); applyPanelChoice(controller, !spaTouch4); }} className={`w-full ${chip(spaTouch4)}`}>
+                  שדרוג ל-Spa Touch 4 <span className="text-[11px] font-medium text-slate-500">· כולל WiFi, מתאים לשני המחשבים</span>
+                </button>
+              </div>
+
+              <div className={card}>
+                <div className={title}><Lightbulb className="text-blue-600" size={18} /> חיטוי</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" disabled={!canEditTech} onClick={() => setOzone(!ozone)} className={chip(ozone)}>אוזון <div className="text-[11px] font-medium text-slate-500">כלול ברוב הדגמים</div></button>
+                  <button type="button" disabled={!canEditTech} onClick={() => setUv(!uv)} className={chip(uv)}>UV <div className="text-[11px] font-medium text-slate-500">תוספת</div></button>
+                </div>
+                {selectedAccessories.includes('sand-filter') && <p className="text-xs text-slate-600 mt-3">הלקוח הוסיף פילטר חול במכירה.</p>}
+              </div>
+
+              <div className={card}>
+                <div className={title}><Compass className="text-blue-600" size={18} /> החלטות ייצור</div>
+                <div className="space-y-3">
+                  {[
+                    { title: 'מקור הקליפה', options: SHELL_SOURCES, value: shellSource, set: setShellSource },
+                    { title: 'מקום האיבזור', options: EQUIPMENT_LOCATIONS, value: equipmentLocation, set: setEquipmentLocation },
+                    { title: 'אופן מסירה', options: DELIVERY_METHODS, value: deliveryMethod, set: setDeliveryMethod },
+                  ].map((group) => (
+                    <div key={group.title}>
+                      <div className="text-xs font-bold text-slate-600 mb-1.5">{group.title}</div>
+                      <div className={`grid gap-2 ${group.options.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                        {group.options.map((opt) => (
+                          <button type="button" key={opt.id} disabled={!canEditTech} onClick={() => group.set(opt.id as any)} className={chip(group.value === opt.id)}>
+                            <div className="text-xs">{opt.label}</div>
+                            <div className="text-[10px] font-medium text-slate-500 leading-tight">{opt.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+              <button type="button" onClick={goToProduction} className="px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition cursor-pointer">פתח את השרטוט</button>
+              {canEditTech && (
+                <button type="button" onClick={() => handleSaveOrder('save')} className="px-5 py-3 rounded-2xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-sm transition cursor-pointer"><Save size={16} className="inline ml-1" /> שמור</button>
+              )}
+              {canEditTech && !isLockedOrder(editingOrder) && (
+                <button type="button" onClick={() => handleSaveOrder('approve')} className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition cursor-pointer">
+                  <CheckCircle2 size={18} /> אשר בדיקה טכנית ושלח להכנת קיט
+                </button>
+              )}
+            </div>
+          </main>
+        );
+      })()}
+
       {activeTab === 'warehouse' && (
         <main className="max-w-4xl mx-auto p-6 md:p-8 w-full print:p-0">
           <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:m-0">
@@ -1523,6 +1749,20 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">מקום האיבזור:</span><span className="font-bold text-slate-800">{EQUIPMENT_LOCATIONS.find(s => s.id === equipmentLocation)?.label || 'טרם נקבע'}</span></div>
                 <div className="flex justify-between border-b border-slate-100 pb-2"><span className="text-slate-500">אופן מסירה:</span><span className="font-bold text-slate-800">{DELIVERY_METHODS.find(s => s.id === deliveryMethod)?.label || 'טרם נקבע'}</span></div>
               </div>
+            </div>
+
+            <div className="mb-8">
+              <h3 className="font-black text-lg text-slate-800 mb-3 bg-slate-100 p-2 rounded-lg">ג׳טים, מחשב וחיטוי (מהבדיקה הטכנית)</h3>
+              <table className="w-full text-right border-collapse text-sm">
+                <tbody>
+                  <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500 w-40">גוון ג׳טים</td><td className="py-2.5 px-2 font-bold text-slate-800">{JET_COLORS.find(c => c.id === jetColor)?.label || 'טרם נקבע'}</td><td className="w-20"></td></tr>
+                  <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500">ספקי ג׳טים</td><td className="py-2.5 px-2 font-bold text-slate-800">{jetSuppliers.length ? jetSuppliers.join(' + ') : 'טרם נקבע'}</td><td></td></tr>
+                  <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500">מחשב</td><td className="py-2.5 px-2 font-bold text-slate-800">{CONTROLLERS.find(c => c.id === controller)?.label || 'טרם נקבע'}</td><td className="py-2.5 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td></tr>
+                  <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500">פאנל</td><td className="py-2.5 px-2 font-bold text-slate-800">{spaTouch4 ? 'Spa Touch 4 (כולל WiFi)' : (CONTROLLERS.find(c => c.id === controller)?.panelLabel || 'טרם נקבע')}</td><td className="py-2.5 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td></tr>
+                  {ozone && <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500">אוזון</td><td className="py-2.5 px-2 font-bold text-slate-800">כלול</td><td className="py-2.5 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td></tr>}
+                  {uv && <tr className="border-b border-slate-100"><td className="py-2.5 px-2 text-slate-500">UV</td><td className="py-2.5 px-2 font-bold text-slate-800">תוספת</td><td className="py-2.5 px-2 text-center"><div className="w-5 h-5 border-2 border-slate-300 rounded mx-auto"></div></td></tr>}
+                </tbody>
+              </table>
             </div>
 
             {salesNotes && (
@@ -1594,12 +1834,12 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             )}
 
             <div className="print:hidden border-t border-slate-200 pt-6 flex flex-col sm:flex-row justify-between gap-4 mt-12">
-              <button onClick={() => setActiveTab('production')} className="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition">
-                חזור לשלב 2: תכנון
-              </button>
-              <button onClick={() => handleSaveOrder('final')} className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md transition cursor-pointer">
-                <CheckCircle2 size={20} /> סגור ושמור פקודת ייצור סופית למפעל
-              </button>
+              {allowedTabs.includes('tasks') && (
+                <button onClick={() => setActiveTab('tasks')} className="px-6 py-3 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition cursor-pointer">
+                  חזור למשימות שלי
+                </button>
+              )}
+              <p className="text-xs text-slate-500 self-center">סיום הכנת הקיט או הליקוט מסמנים במסך "המשימות שלי".</p>
             </div>
 
           </div>
@@ -1666,6 +1906,11 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
                               <span className="font-bold">הערה מהתחנה הקודמת:</span> {lastEntry.note}
                             </p>
                           )}
+                          {['kit-list', 'picking'].includes(s.id) && (
+                            <button onClick={() => loadOrder(order, 'warehouse')} className="mb-2 w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer">
+                              <ClipboardList size={14} /> פתח רשימת ליקוט
+                            </button>
+                          )}
                           <button
                             onClick={() => { setConfirmNote(''); setConfirmOrderId(order.id); }}
                             className="mt-auto w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition cursor-pointer"
@@ -1682,10 +1927,25 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
             </div>
           )}
 
+          {techQueue.length > 0 && (
+            <section className="mb-10">
+              <h3 className="text-base font-bold text-slate-900 mb-1">ממתינות לבדיקה טכנית</h3>
+              <p className="text-xs text-slate-500 mb-3">מכירות שהמוכר סיים. קובי עובר עליהן עם המוכר, מקצה מספר ספא ומאשר.</p>
+              <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+                {techQueue.map((order) => (
+                  <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                    <span className="text-slate-700">{order.customerName} <span className="text-xs text-slate-400">· {MODELS.find(m => m.id === order.selectedModelId)?.name}</span></span>
+                    <button onClick={() => loadOrder(order, 'tech')} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer">לבדיקה</button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {myDrafts.length > 0 && (
             <section className="mb-10">
               <h3 className="text-base font-bold text-slate-900 mb-1">טיוטות שלא נסגרו</h3>
-              <p className="text-xs text-slate-500 mb-3">טיוטה עוברת לייצור כשסוגרים את פקודת הייצור בלשונית המכירה.</p>
+              <p className="text-xs text-slate-500 mb-3">טיוטה עוברת לבדיקה טכנית כשהמוכר לוחץ "סיים מכירה" בלשונית המכירה.</p>
               <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
                 {myDrafts.map((order) => (
                   <div key={order.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">

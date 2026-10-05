@@ -23,23 +23,23 @@ service cloud.firestore {
     }
 
     // הזמנות: כל משתמש מורשה רואה אותן. פתיחה ועריכה מלאה רק לאשדוד,
-    // ומחסן/מפעל/הנהח״ש רשאים לקדם תחנה בלבד — לא לגעת בתוכן ההזמנה.
+    // והכנת קיט/מחסן/מפעל/הנהח״ש רשאים לקדם תחנה בלבד — לא לגעת בתוכן ההזמנה.
     function onlyStageFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['stage', 'stageHistory', 'status', 'updatedAt', 'updatedBy']);
     }
 
     match /orders/{orderId} {
-      allow read: if hasRole(['admin', 'sales', 'planner', 'warehouse', 'factory', 'accounting']);
+      allow read: if hasRole(['admin', 'sales', 'planner', 'kit', 'warehouse', 'factory', 'accounting']);
       allow create: if hasRole(['admin', 'sales', 'planner']);
       allow update: if hasRole(['admin', 'sales', 'planner'])
-                    || (hasRole(['warehouse', 'factory', 'accounting']) && onlyStageFields());
+                    || (hasRole(['kit', 'warehouse', 'factory', 'accounting']) && onlyStageFields());
       allow delete: if hasRole(['admin']);
     }
 
     // תבניות יצרן: כולם קוראים כדי לטעון פריסה, רק מנהל ומתכנן משנים.
     match /presets/{presetId} {
-      allow read: if hasRole(['admin', 'sales', 'planner', 'warehouse', 'factory', 'accounting']);
+      allow read: if hasRole(['admin', 'sales', 'planner', 'kit', 'warehouse', 'factory', 'accounting']);
       allow write: if hasRole(['admin', 'planner']);
     }
 
