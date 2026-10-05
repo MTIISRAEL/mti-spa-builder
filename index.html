@@ -457,25 +457,23 @@ function SpaProductionPage({ currentUser, userRole, onSignOut }) {
     setPresetPlacedItems(initial);
   }, []);
 
-  useEffect(() => {
-    const testExtensions = ['jpeg', 'jpg', 'png', 'webp'];
-    let found = false;
-    testExtensions.forEach((ext) => {
+  // שרטוט היצרן הנקי (בלי ג'טים ואביזרים) קודם, ותמונת המבט העליון רק כשאין שרטוט לדגם
+  const findTopView = (modelId: string, onFound: (src: string) => void) => {
+    const candidates = [`models/DRAWINGS/${modelId}.svg`, ...['jpeg', 'jpg', 'png', 'webp'].map(ext => `models/TOP-VIEW/${modelId}.${ext}`)];
+    let cancelled = false;
+    const tryNext = (i: number) => {
+      if (cancelled || i >= candidates.length) return;
       const testImg = new window.Image();
-      testImg.src = `models/TOP-VIEW/${selectedModelId}.${ext}`;
-      testImg.onload = () => { if (!found) { found = true; setModelImageSrc(`models/TOP-VIEW/${selectedModelId}.${ext}`); } };
-    });
-  }, [selectedModelId]);
+      testImg.onload = () => { if (!cancelled) onFound(candidates[i]); };
+      testImg.onerror = () => tryNext(i + 1);
+      testImg.src = candidates[i];
+    };
+    tryNext(0);
+    return () => { cancelled = true; };
+  };
 
-  useEffect(() => {
-    const testExtensions = ['jpeg', 'jpg', 'png', 'webp'];
-    let found = false;
-    testExtensions.forEach((ext) => {
-      const testImg = new window.Image();
-      testImg.src = `models/TOP-VIEW/${presetModelId}.${ext}`;
-      testImg.onload = () => { if (!found) { found = true; setPresetModelImageSrc(`models/TOP-VIEW/${presetModelId}.${ext}`); } };
-    });
-  }, [presetModelId]);
+  useEffect(() => findTopView(selectedModelId, setModelImageSrc), [selectedModelId]);
+  useEffect(() => findTopView(presetModelId, setPresetModelImageSrc), [presetModelId]);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
